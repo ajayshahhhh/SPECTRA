@@ -68,7 +68,11 @@ struct MLARViewContainer: UIViewRepresentable {
                 let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
                 await MainActor.run {
                     if let r = result {
-                        model.depthImage     = r.colorImage
+                        let blended = DepthProcessor.blendHeatmapWithCamera(
+                            heatmap: r.colorImage,
+                            capturedImage: frame.capturedImage
+                        )
+                        model.depthImage     = blended ?? r.colorImage
                         model.centerDistance = r.centerDistance
                         model.minDepth       = r.minDepth
                         model.maxDepth       = r.maxDepth

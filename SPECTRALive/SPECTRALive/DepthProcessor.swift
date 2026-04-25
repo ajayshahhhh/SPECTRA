@@ -253,6 +253,73 @@ enum DepthProcessor {
         return makePortraitImage(rgba, width: outW, height: outH)
     }
 
+    // MARK: - Blend pre-colorized heatmap with camera luminance
+
+    nonisolated static func blendHeatmapWithCamera(
+        heatmap: UIImage,
+        capturedImage: CVPixelBuffer
+    ) -> UIImage? {
+        guard let heatCG = heatmap.cgImage else { return nil }
+        let outW = heatCG.width
+        let outH = heatCG.height
+        let count = outW * outH
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        var heatPixels = [UInt8](repeating: 0, count: count * 4)
+        guard let heatCtx = CGContext(
+            data: &heatPixels,
+            width: outW, height: outH,
+            bitsPerComponent: 8, bytesPerRow: outW * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        heatCtx.draw(heatCG, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+
+        let ci = CIImage(cvPixelBuffer: capturedImage)
+        let sx = CGFloat(outW) / ci.extent.width
+        let sy = CGFloat(outH) / ci.extent.height
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+
+        var camBuf: CVPixelBuffer?
+        CVPixelBufferCreate(nil, outW, outH, kCVPixelFormatType_32BGRA,
+                            [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary,
+                            &camBuf)
+        guard let camBuf else { return nil }
+        ciContext.render(scaled, to: camBuf)
+
+        CVPixelBufferLockBaseAddress(camBuf, .readOnly)
+        guard let camBase = CVPixelBufferGetBaseAddress(camBuf) else {
+            CVPixelBufferUnlockBaseAddress(camBuf, .readOnly)
+            return nil
+        }
+        let camBpr = CVPixelBufferGetBytesPerRow(camBuf)
+
+        var rgba = [UInt8](repeating: 0, count: count * 4)
+        for y in 0..<outH {
+            let camRow = camBase.advanced(by: y * camBpr).assumingMemoryBound(to: UInt8.self)
+            for x in 0..<outW {
+                let i = y * outW + x
+                let cb = Float(camRow[x * 4])
+                let cg = Float(camRow[x * 4 + 1])
+                let cr = Float(camRow[x * 4 + 2])
+                let lum = (0.299 * cr + 0.587 * cg + 0.114 * cb) / 255.0
+
+                let hr = Float(heatPixels[i * 4])
+                let hg = Float(heatPixels[i * 4 + 1])
+                let hb = Float(heatPixels[i * 4 + 2])
+
+                let b = 0.3 + 0.7 * lum
+                rgba[i * 4]     = UInt8(min(255, hr * b))
+                rgba[i * 4 + 1] = UInt8(min(255, hg * b))
+                rgba[i * 4 + 2] = UInt8(min(255, hb * b))
+                rgba[i * 4 + 3] = 255
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(camBuf, .readOnly)
+
+        return makePortraitImage(rgba, width: outW, height: outH)
+    }
+
     // MARK: - Image creation
 
     nonisolated static func makePortraitImage(_ pixels: [UInt8], width: Int, height: Int) -> UIImage? {
