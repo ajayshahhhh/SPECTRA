@@ -12,6 +12,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 }
 
 struct ContentView: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var model = ARSessionModel()
     @State private var isCapturing = false
     @State private var showShareSheet = false
@@ -42,10 +43,11 @@ struct ContentView: View {
                     .padding(.top, 60)
                 Spacer()
                 HStack(spacing: 40) {
-                    shareButton
-                        .opacity(model.capturedURLs.isEmpty ? 0 : 1)
+                    backButton
                     captureButton
-                    Color.clear.frame(width: 44, height: 44)
+                    shareButton
+                        .disabled(model.capturedURLs.isEmpty)
+                        .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
                 .padding(.bottom, 48)
             }
@@ -68,10 +70,9 @@ struct ContentView: View {
                     Spacer()
                 }
                 .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: model.captureMessage)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: model.captureMessage)
-        .animation(.easeInOut(duration: 0.3), value: model.capturedURLs.isEmpty)
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: model.capturedURLs)
         }
@@ -179,6 +180,16 @@ struct ContentView: View {
             }
         }
         .disabled(isCapturing)
+    }
+
+    private var backButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.2), in: Circle())
+        }
     }
 
     private var shareButton: some View {
