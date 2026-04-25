@@ -5,6 +5,7 @@ import UIKit
 struct SPECTRANetResult {
     let depth: DepthResult
     let edge: EdgeDepthResult?
+    let recoloredImage: UIImage?
 }
 import Compression
 
@@ -162,6 +163,47 @@ enum SPECTRANetProcessor {
                 vDSP_vclip(src.baseAddress!, 1, &dmin, &dmax, dst.baseAddress!, 1, vDSP_Length(count))
             }
         }
+        for i in 0..<count where confHigh[i] < 0.1 { clamped[i] = 0 }
+
+        if let prev = prevDepths, prev.count == count {
+            var alpha = emaAlpha
+            var blended = [Float](repeating: 0, count: count)
+            prev.withUnsafeBufferPointer { pBuf in
+                clamped.withUnsafeBufferPointer { cBuf in
+                    blended.withUnsafeMutableBufferPointer { bBuf in
+                        vDSP_vintb(pBuf.baseAddress!, 1,
+                                   cBuf.baseAddress!, 1,
+                                   &alpha,
+                                   bBuf.baseAddress!, 1,
+                                   vDSP_Length(count))
+                    }
+                }
+            }
+            for i in 0..<count where clamped[i] == 0 {
+                blended[i] = prev[i]
+            }
+            clamped = blended
+        }
+        prevDepths = clamped
+
+        guard let depthResult = DepthProcessor.colorize(depths: clamped, width: W, height: H) else {
+            return nil
+        }
+
+        let edgeResult = EdgeDepthProcessor.process(
+            capturedImage: frame.capturedImage,
+            depths: clamped, dW: W, dH: H,
+            detectObjects: false
+        )
+
+        let rcW = 640, rcH = 480
+        let rcDepths = vImageResampleFloat(clamped, srcW: W, srcH: H, dstW: rcW, dstH: rcH)
+        let recolored = DepthProcessor.recolorCameraImage(
+            capturedImage: frame.capturedImage,
+            depths: rcDepths, outW: rcW, outH: rcH
+        )
+
+        return SPECTRANetResult(depth: depthResult, edge: edgeResult, recoloredImage: recolored)
 
         return DepthProcessor.colorize(depths: clamped, width: W, height: H)
     }

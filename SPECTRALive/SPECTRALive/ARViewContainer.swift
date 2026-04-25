@@ -44,7 +44,7 @@ final class Coordinator: NSObject, ARSessionDelegate {
         let now = CFAbsoluteTimeGetCurrent()
         guard now - lastProcessTime >= processInterval else { return }
         lastProcessTime = now
-        guard let result = DepthProcessor.process(frame: frame) else { return }
+        guard let result = DepthProcessor.recolorCamera(frame: frame) else { return }
         let image = result.colorImage
         let trackingNormal = frame.camera.trackingState == .normal
         let dist = trackingNormal ? result.centerDistance : nil

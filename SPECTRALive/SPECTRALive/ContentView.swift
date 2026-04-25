@@ -27,11 +27,11 @@ struct ContentView: View {
             if let depthImage = model.depthImage {
                 Image(uiImage: depthImage)
                     .resizable()
+                    .interpolation(.high)
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .ignoresSafeArea()
-                    .opacity(0.5)
                     .allowsHitTesting(false)
             }
 
@@ -45,7 +45,8 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.top, 56)
-                .padding(.horizontal, 16)
+                .padding(.leading, 24)
+                .padding(.trailing, 16)
                 distanceLabel
                     .padding(.top, 4)
                 Spacer()
@@ -63,6 +64,11 @@ struct ContentView: View {
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
                 .padding(.bottom, 48)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                colorScaleKey
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 140)
             }
 
             // ── Toast ─────────────────────────────────────────────────
@@ -157,6 +163,7 @@ struct ContentView: View {
             }
             .font(.system(size: 9, weight: .medium, design: .monospaced))
             .foregroundStyle(.white)
+            .fixedSize(horizontal: true, vertical: false)
             .frame(height: barHeight)
 
             LinearGradient(

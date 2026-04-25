@@ -3,6 +3,7 @@ import SwiftUI
 enum AppDestination: Hashable {
     case liveDepth
     case mlDepth
+    case demo
 }
 
 struct HomeView: View {
@@ -34,6 +35,17 @@ struct HomeView: View {
                         icon: "brain",
                         tint: .purple
                     ) { path.append(AppDestination.mlDepth) }
+
+                    Text("Supports 0.3–5m depth range")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+
+                    modeButton(
+                        title: "Demo",
+                        subtitle: "Side-by-side camera + depth comparison",
+                        icon: "rectangle.split.2x1",
+                        tint: .orange
+                    ) { path.append(AppDestination.demo) }
                 }
                 .padding(.horizontal, 28)
             }
@@ -47,6 +59,10 @@ struct HomeView: View {
                         .toolbar(.hidden, for: .navigationBar)
                 case .mlDepth:
                     MLDepthView()
+                        .navigationBarBackButtonHidden(true)
+                        .toolbar(.hidden, for: .navigationBar)
+                case .demo:
+                    DemoView()
                         .navigationBarBackButtonHidden(true)
                         .toolbar(.hidden, for: .navigationBar)
                 }

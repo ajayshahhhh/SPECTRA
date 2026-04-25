@@ -43,7 +43,8 @@ enum EdgeDepthProcessor {
 
     nonisolated static func process(
         capturedImage: CVPixelBuffer,
-        depths: [Float], dW: Int, dH: Int
+        depths: [Float], dW: Int, dH: Int,
+        detectObjects: Bool = true
     ) -> EdgeDepthResult? {
         var minD: Float = .greatestFiniteMagnitude, maxD: Float = 0
         for d in depths where d > 0 && d.isFinite {
@@ -70,14 +71,22 @@ enum EdgeDepthProcessor {
         contourReq.detectsDarkOnLight = true
         contourReq.maximumImageDimension = 512
 
-        let faceReq = VNDetectFaceRectanglesRequest()
-        let humanReq = VNDetectHumanRectanglesRequest()
+        var requests: [VNRequest] = [contourReq]
+        var faceReq: VNDetectFaceRectanglesRequest?
+        var humanReq: VNDetectHumanRectanglesRequest?
+        if detectObjects {
+            let fr = VNDetectFaceRectanglesRequest()
+            let hr = VNDetectHumanRectanglesRequest()
+            faceReq = fr
+            humanReq = hr
+            requests.append(contentsOf: [fr, hr])
+        }
 
-        try? handler.perform([contourReq, faceReq, humanReq])
+        try? handler.perform(requests)
 
         let contourObs = contourReq.results?.first as? VNContoursObservation
-        let faces   = faceReq.results   ?? []
-        let humans: [VNDetectedObjectObservation]  = humanReq.results  ?? []
+        let faces: [VNFaceObservation] = faceReq?.results ?? []
+        let humans: [VNDetectedObjectObservation] = humanReq?.results ?? []
 
         var detections: [EdgeDetection] = []
 
