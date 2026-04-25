@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import ARKit
 import RealityKit
 
@@ -38,9 +39,9 @@ struct EdgeARViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 
     final class Coordinator: NSObject, ARSessionDelegate {
-        nonisolated(unsafe) private let model: EdgeDepthSessionModel
+        private let model: EdgeDepthSessionModel
         nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
-        // ~12 fps — Vision contour detection is fast but drawing is CPU-bound
+        nonisolated(unsafe) private var processing = false
         private let processInterval: CFAbsoluteTime = 1.0 / 12.0
 
         init(model: EdgeDepthSessionModel) { self.model = model }
@@ -49,10 +50,13 @@ struct EdgeARViewContainer: UIViewRepresentable {
             model.latestFrame = frame
             let now = CFAbsoluteTimeGetCurrent()
             guard now - lastProcessTime >= processInterval else { return }
+            guard !processing else { return }
+            processing = true
             lastProcessTime = now
 
-            Task.detached(priority: .userInitiated) { [model = self.model] in
+            Task.detached(priority: .userInitiated) { [model = self.model, coordinator = self] in
                 let result = EdgeDepthProcessor.process(frame: frame)
+                coordinator.processing = false
                 await MainActor.run {
                     if let r = result {
                         model.overlayImage    = r.overlayImage

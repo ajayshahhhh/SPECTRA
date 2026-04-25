@@ -4,30 +4,41 @@ import CoreImage
 import Accelerate
 import UIKit
 
+struct SPECTRANetResult {
+    let depth: DepthResult
+    let edge: EdgeDepthResult?
+}
+
 enum SPECTRANetProcessor {
 
-    // Half the training resolution — 4× fewer pixels, ~3–4× faster on Neural Engine
-    static let modelH: Int = 384
-    static let modelW: Int = 512
-    static let depthMax: Float = 10.0
-    static let depthMin: Float = 0.5
+    nonisolated static let modelH: Int = 768
+    nonisolated static let modelW: Int = 1024
+    nonisolated static let depthMax: Float = 10.0
+    nonisolated static let depthMin: Float = 0.5
 
-    private static let imagenetMean: (Float, Float, Float) = (0.485, 0.456, 0.406)
-    private static let imagenetStd:  (Float, Float, Float) = (0.229, 0.224, 0.225)
+    nonisolated private static let imagenetMean: (Float, Float, Float) = (0.485, 0.456, 0.406)
+    nonisolated private static let imagenetStd:  (Float, Float, Float) = (0.229, 0.224, 0.225)
 
-    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated private static let ciContext = CIContext(options: [
+        .useSoftwareRenderer: false,
+        .workingColorSpace: CGColorSpaceCreateDeviceRGB()
+    ])
 
-    private static let sharedModel: spectranet_depth? = {
+    nonisolated private static let emaAlpha: Float = 0.3
+    nonisolated(unsafe) private static var prevDepths: [Float]?
+
+    nonisolated(unsafe) private static let sharedMLModel: MLModel? = {
         let cfg = MLModelConfiguration()
         cfg.computeUnits = .all
-        return try? spectranet_depth(configuration: cfg)
+        guard let url = Bundle.main.url(forResource: "spectranet_depth", withExtension: "mlmodelc") else { return nil }
+        return try? MLModel(contentsOf: url, configuration: cfg)
     }()
 
     // MARK: - Main entry point
 
-    nonisolated static func process(frame: ARFrame) -> DepthResult? {
+    nonisolated static func process(frame: ARFrame) -> SPECTRANetResult? {
         guard let sceneDepth = frame.sceneDepth,
-              let model = sharedModel else { return nil }
+              let model = sharedMLModel else { return nil }
 
         let H = modelH, W = modelW, count = H * W
 
@@ -75,7 +86,7 @@ enum SPECTRANetProcessor {
         guard Float(validCount) / Float(lH * lW) >= 0.01 else { return nil }
 
         // Zero out non-high-confidence depth before bicubic upsample
-        for i in 0..<lH * lW where confLow[i] < 2 { loDepth[i] = 0 }
+        for i in 0..<lH * lW where confLow[i] < 1 { loDepth[i] = 0 }
 
         // ── Depth inputs ──────────────────────────────────────────────
         let bicubicFlat = vImageResampleFloat(loDepth, srcW: lW, srcH: lH, dstW: W, dstH: H)
@@ -89,7 +100,7 @@ enum SPECTRANetProcessor {
         }
         vDSP_vsmul(bicubicNorm, 1, &invMax, &bicubicNorm, 1, vDSP_Length(count))
 
-        var confFloat = confLow.map { $0 == 2 ? Float(1) : Float(0) }
+        let confFloat = confLow.map { $0 == 2 ? Float(1) : Float(0) }
         let confHigh = vImageResampleFloat(confFloat, srcW: lW, srcH: lH, dstW: W, dstH: H)
 
         guard let bicubicArr = try? MLMultiArray(
@@ -105,10 +116,15 @@ enum SPECTRANetProcessor {
         guard let rgbArr = makeRGBArray(from: frame.capturedImage, H: H, W: W) else { return nil }
 
         // ── Inference ─────────────────────────────────────────────────
-        guard let output = try? model.prediction(rgb: rgbArr, bicubic_norm: bicubicArr, conf_hi: confArr) else { return nil }
+        guard let input = try? MLDictionaryFeatureProvider(dictionary: [
+            "rgb": MLFeatureValue(multiArray: rgbArr),
+            "bicubic_norm": MLFeatureValue(multiArray: bicubicArr),
+            "conf_hi": MLFeatureValue(multiArray: confArr)
+        ]),
+        let output = try? model.prediction(from: input),
+        let predNorm = output.featureValue(for: "pred_norm")?.multiArrayValue else { return nil }
 
         var depths = [Float](repeating: 0, count: count)
-        let predNorm = output.pred_norm
         if predNorm.dataType == .float32 {
             memcpy(&depths, predNorm.dataPointer, count * MemoryLayout<Float>.size)
         } else if predNorm.dataType == .float16 {
@@ -130,13 +146,41 @@ enum SPECTRANetProcessor {
                 vDSP_vclip(src.baseAddress!, 1, &dmin, &dmax, dst.baseAddress!, 1, vDSP_Length(count))
             }
         }
+        for i in 0..<count where confHigh[i] < 0.1 { clamped[i] = 0 }
 
-        return DepthProcessor.colorize(depths: clamped, width: W, height: H)
+        if let prev = prevDepths, prev.count == count {
+            var alpha = emaAlpha
+            var blended = [Float](repeating: 0, count: count)
+            prev.withUnsafeBufferPointer { pBuf in
+                clamped.withUnsafeBufferPointer { cBuf in
+                    blended.withUnsafeMutableBufferPointer { bBuf in
+                        vDSP_vintb(pBuf.baseAddress!, 1,
+                                   cBuf.baseAddress!, 1,
+                                   &alpha,
+                                   bBuf.baseAddress!, 1,
+                                   vDSP_Length(count))
+                    }
+                }
+            }
+            clamped = blended
+        }
+        prevDepths = clamped
+
+        guard let depthResult = DepthProcessor.colorize(depths: clamped, width: W, height: H) else {
+            return nil
+        }
+
+        let edgeResult = EdgeDepthProcessor.process(
+            capturedImage: frame.capturedImage,
+            depths: clamped, dW: W, dH: H
+        )
+
+        return SPECTRANetResult(depth: depthResult, edge: edgeResult)
     }
 
     // MARK: - RGB preprocessing via vImage (fast channel split + vDSP normalize)
 
-    private static func makeRGBArray(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> MLMultiArray? {
+    nonisolated private static func makeRGBArray(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> MLMultiArray? {
         // Render landscape capturedImage → W×H BGRA pixel buffer
         let ci = CIImage(cvPixelBuffer: pixelBuffer)
         let sx = CGFloat(W) / ci.extent.width
@@ -160,32 +204,41 @@ enum SPECTRANetProcessor {
         let bpr = CVPixelBufferGetBytesPerRow(outBuf)
 
         let count = H * W
+
+        // Deinterleave BGRA → four UInt8 planes via vImage
+        var bBytes = [UInt8](repeating: 0, count: count)
+        var gBytes = [UInt8](repeating: 0, count: count)
+        var rBytes = [UInt8](repeating: 0, count: count)
+        var aBytes = [UInt8](repeating: 0, count: count)
+
+        bBytes.withUnsafeMutableBufferPointer { bp in
+        gBytes.withUnsafeMutableBufferPointer { gp in
+        rBytes.withUnsafeMutableBufferPointer { rp in
+        aBytes.withUnsafeMutableBufferPointer { ap in
+            var src = vImage_Buffer(data: base, height: vImagePixelCount(H),
+                                    width: vImagePixelCount(W), rowBytes: bpr)
+            var bDst = vImage_Buffer(data: bp.baseAddress!, height: vImagePixelCount(H),
+                                     width: vImagePixelCount(W), rowBytes: W)
+            var gDst = vImage_Buffer(data: gp.baseAddress!, height: vImagePixelCount(H),
+                                     width: vImagePixelCount(W), rowBytes: W)
+            var rDst = vImage_Buffer(data: rp.baseAddress!, height: vImagePixelCount(H),
+                                     width: vImagePixelCount(W), rowBytes: W)
+            var aDst = vImage_Buffer(data: ap.baseAddress!, height: vImagePixelCount(H),
+                                     width: vImagePixelCount(W), rowBytes: W)
+            vImageConvert_ARGB8888toPlanar8(&src, &bDst, &gDst, &rDst, &aDst, vImage_Flags(kvImageNoFlags))
+        }}}}
+
+        // UInt8 → Float [0,1]
         var rPlane = [Float](repeating: 0, count: count)
         var gPlane = [Float](repeating: 0, count: count)
         var bPlane = [Float](repeating: 0, count: count)
-        var aPlane = [Float](repeating: 0, count: count)  // discarded
-
-        // vImageConvert_BGRA8888toPlanarF splits interleaved BGRA → 4 float planes in [0,1]
-        var maxF = Pixel_FFFF(1, 1, 1, 1)
-        var minF = Pixel_FFFF(0, 0, 0, 0)
-
-        rPlane.withUnsafeMutableBufferPointer { rp in
-        gPlane.withUnsafeMutableBufferPointer { gp in
-        bPlane.withUnsafeMutableBufferPointer { bp in
-        aPlane.withUnsafeMutableBufferPointer { ap in
-            var src = vImage_Buffer(data: base, height: vImagePixelCount(H),
-                                    width: vImagePixelCount(W), rowBytes: bpr)
-            var rBuf = vImage_Buffer(data: rp.baseAddress!, height: vImagePixelCount(H),
-                                     width: vImagePixelCount(W), rowBytes: W * MemoryLayout<Float>.size)
-            var gBuf = vImage_Buffer(data: gp.baseAddress!, height: vImagePixelCount(H),
-                                     width: vImagePixelCount(W), rowBytes: W * MemoryLayout<Float>.size)
-            var bBuf = vImage_Buffer(data: bp.baseAddress!, height: vImagePixelCount(H),
-                                     width: vImagePixelCount(W), rowBytes: W * MemoryLayout<Float>.size)
-            var aBuf = vImage_Buffer(data: ap.baseAddress!, height: vImagePixelCount(H),
-                                     width: vImagePixelCount(W), rowBytes: W * MemoryLayout<Float>.size)
-            // BGRA → destB, destG, destR, destA (channel order matches argument order)
-            vImageConvert_BGRA8888toPlanarF(&src, &bBuf, &gBuf, &rBuf, &aBuf, &maxF, &minF, 0)
-        }}}}
+        var inv255: Float = 1.0 / 255.0
+        vDSP_vfltu8(rBytes, 1, &rPlane, 1, vDSP_Length(count))
+        vDSP_vsmul(rPlane, 1, &inv255, &rPlane, 1, vDSP_Length(count))
+        vDSP_vfltu8(gBytes, 1, &gPlane, 1, vDSP_Length(count))
+        vDSP_vsmul(gPlane, 1, &inv255, &gPlane, 1, vDSP_Length(count))
+        vDSP_vfltu8(bBytes, 1, &bPlane, 1, vDSP_Length(count))
+        vDSP_vsmul(bPlane, 1, &inv255, &bPlane, 1, vDSP_Length(count))
 
         // ImageNet normalize: (x − mean) / std  ≡  x * (1/std) + (−mean/std)
         let (mr, mg, mb) = imagenetMean
@@ -210,7 +263,7 @@ enum SPECTRANetProcessor {
 
     // MARK: - vImage float resampling
 
-    private static func vImageResampleFloat(_ src: [Float], srcW: Int, srcH: Int, dstW: Int, dstH: Int) -> [Float] {
+    nonisolated private static func vImageResampleFloat(_ src: [Float], srcW: Int, srcH: Int, dstW: Int, dstH: Int) -> [Float] {
         var result = [Float](repeating: 0, count: dstH * dstW)
         src.withUnsafeBytes { srcRaw in
             result.withUnsafeMutableBytes { dstRaw in

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import ARKit
 import RealityKit
 
@@ -14,6 +15,8 @@ final class MLDepthSessionModel: ObservableObject {
     @Published var capturedURLs: [URL] = []
     @Published var isProcessing = false
     @Published var lastInferenceMs: Int?
+    @Published var edgeOverlay: UIImage?
+    @Published var detections: [EdgeDetection] = []
     nonisolated(unsafe) var latestFrame: ARFrame?
 }
 
@@ -43,9 +46,9 @@ struct MLARViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 
     final class Coordinator: NSObject, ARSessionDelegate {
-        nonisolated(unsafe) private let model: MLDepthSessionModel
+        private let model: MLDepthSessionModel
         nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
-        // 2 fps dispatch rate — CoreML on Neural Engine runs ~150–300 ms per frame
+        nonisolated(unsafe) private var processing = false
         private let processInterval: CFAbsoluteTime = 0.5
 
         init(model: MLDepthSessionModel) { self.model = model }
@@ -54,20 +57,27 @@ struct MLARViewContainer: UIViewRepresentable {
             model.latestFrame = frame
             let now = CFAbsoluteTimeGetCurrent()
             guard now - lastProcessTime >= processInterval else { return }
+            guard !processing else { return }
+            processing = true
             lastProcessTime = now
 
             Task { @MainActor [model = self.model] in model.isProcessing = true }
 
             let t0 = now
-            Task.detached(priority: .userInitiated) { [model = self.model] in
+            Task.detached(priority: .userInitiated) { [model = self.model, coordinator = self] in
                 let result = SPECTRANetProcessor.process(frame: frame)
                 let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                coordinator.processing = false
                 await MainActor.run {
                     if let r = result {
-                        model.depthImage   = r.colorImage
-                        model.centerDistance = r.centerDistance
-                        model.minDepth     = r.minDepth
-                        model.maxDepth     = r.maxDepth
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            model.depthImage   = r.depth.colorImage
+                        }
+                        model.centerDistance = r.depth.centerDistance
+                        model.minDepth     = r.depth.minDepth
+                        model.maxDepth     = r.depth.maxDepth
+                        model.edgeOverlay  = r.edge?.overlayImage
+                        model.detections   = r.edge?.detections ?? []
                     }
                     model.isProcessing = false
                     model.lastInferenceMs = ms
@@ -108,8 +118,16 @@ struct MLDepthView: View {
                     .clipped()
                     .allowsHitTesting(false)
             } else {
-                // Initial loading state before first inference completes
                 Color.black.opacity(0.25).ignoresSafeArea()
+            }
+
+            // Edge overlay (contours + bounding boxes)
+            if let edgeImg = model.edgeOverlay {
+                Image(uiImage: edgeImg)
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
 
             // Crosshair
@@ -142,6 +160,9 @@ struct MLDepthView: View {
                         }
                         if let ms = model.lastInferenceMs {
                             infoBadge("\(ms) ms")
+                        }
+                        if !model.detections.isEmpty {
+                            detectionCountBadge(model.detections.count)
                         }
                     }
                 }
@@ -199,6 +220,14 @@ struct MLDepthView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(.white, in: Capsule())
+    }
+
+    private func detectionCountBadge(_ n: Int) -> some View {
+        Text("\(n) object\(n == 1 ? "" : "s")")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.white.opacity(0.8))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(.white.opacity(0.15), in: Capsule())
     }
 
     private var loadingBadge: some View {
