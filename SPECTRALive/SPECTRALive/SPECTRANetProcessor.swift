@@ -1,18 +1,29 @@
 import ARKit
 import CoreImage
 import UIKit
+
+struct SPECTRANetResult {
+    let depth: DepthResult
+    let edge: EdgeDepthResult?
+}
 import Compression
 
 enum SPECTRANetProcessor {
 
-    // Half the training resolution — 4× fewer pixels, ~3–4× faster on Neural Engine
-    static let modelH: Int = 384
-    static let modelW: Int = 512
+    nonisolated static let modelH: Int = 768
+    nonisolated static let modelW: Int = 1024
 
-    static let serverURL = URL(string: "ws://10.30.131.25:8000/ws")!
+    nonisolated static let serverURL = URL(string: "ws://10.30.131.25:8000/ws")!
 
-    nonisolated private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated nonisolated private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
+    nonisolated private static let imagenetMean: (Float, Float, Float) = (0.485, 0.456, 0.406)
+    nonisolated private static let imagenetStd:  (Float, Float, Float) = (0.229, 0.224, 0.225)
+
+    nonisolated private static let ciContext = CIContext(options: [
+        .useSoftwareRenderer: false,
+        .workingColorSpace: CGColorSpaceCreateDeviceRGB()
+    ])
     // Persistent WebSocket — opened once, reused for every frame
     private static var socket: URLSessionWebSocketTask? = nil
     private static let session = URLSession(configuration: .default)
@@ -24,9 +35,21 @@ enum SPECTRANetProcessor {
         socket = s
         return s
     }
+    nonisolated private static let emaAlpha: Float = 0.3
+    nonisolated(unsafe) private static var prevDepths: [Float]?
+
+    nonisolated(unsafe) private static let sharedMLModel: MLModel? = {
+        let cfg = MLModelConfiguration()
+        cfg.computeUnits = .all
+        guard let url = Bundle.main.url(forResource: "spectranet_depth", withExtension: "mlmodelc") else { return nil }
+        return try? MLModel(contentsOf: url, configuration: cfg)
+    }()
 
     // MARK: - Main entry point
 
+    nonisolated static func process(frame: ARFrame) -> SPECTRANetResult? {
+        guard let sceneDepth = frame.sceneDepth,
+              let model = sharedMLModel else { return nil }
     nonisolated static func process(frame: ARFrame) async -> DepthResult? {
         guard let sceneDepth = frame.sceneDepth else { return nil }
 
@@ -76,7 +99,7 @@ enum SPECTRANetProcessor {
         guard Float(validCount) / Float(lH * lW) >= 0.01 else { return nil }
 
         // Zero out non-high-confidence depth before bicubic upsample
-        for i in 0..<lH * lW where confLow[i] < 2 { loDepth[i] = 0 }
+        for i in 0..<lH * lW where confLow[i] < 1 { loDepth[i] = 0 }
 
         // ── Depth inputs ──────────────────────────────────────────────
         let bicubicFlat = vImageResampleFloat(loDepth, srcW: lW, srcH: lH, dstW: W, dstH: H)
@@ -90,7 +113,7 @@ enum SPECTRANetProcessor {
         }
         vDSP_vsmul(bicubicNorm, 1, &invMax, &bicubicNorm, 1, vDSP_Length(count))
 
-        var confFloat = confLow.map { $0 == 2 ? Float(1) : Float(0) }
+        let confFloat = confLow.map { $0 == 2 ? Float(1) : Float(0) }
         let confHigh = vImageResampleFloat(confFloat, srcW: lW, srcH: lH, dstW: W, dstH: H)
 
         guard let bicubicArr = try? MLMultiArray(
@@ -109,10 +132,15 @@ enum SPECTRANetProcessor {
         guard let rgbArr = makeRGBArray(from: frame.capturedImage, H: H, W: W) else { return nil }
 
         // ── Inference ─────────────────────────────────────────────────
-        guard let output = try? model.prediction(rgb: rgbArr, bicubic_norm: bicubicArr, conf_hi: confArr) else { return nil }
+        guard let input = try? MLDictionaryFeatureProvider(dictionary: [
+            "rgb": MLFeatureValue(multiArray: rgbArr),
+            "bicubic_norm": MLFeatureValue(multiArray: bicubicArr),
+            "conf_hi": MLFeatureValue(multiArray: confArr)
+        ]),
+        let output = try? model.prediction(from: input),
+        let predNorm = output.featureValue(for: "pred_norm")?.multiArrayValue else { return nil }
 
         var depths = [Float](repeating: 0, count: count)
-        let predNorm = output.pred_norm
         if predNorm.dataType == .float32 {
             memcpy(&depths, predNorm.dataPointer, count * MemoryLayout<Float>.size)
         } else if predNorm.dataType == .float16 {

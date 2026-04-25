@@ -96,20 +96,14 @@ enum DepthProcessor {
         let count = width * height
         guard count == depths.count else { return nil }
 
-        var minD: Float = .greatestFiniteMagnitude
-        var maxD: Float = -.greatestFiniteMagnitude
-        for d in depths {
-            guard !d.isNaN, d > 0 else { continue }
-            if d < minD { minD = d }
-            if d > maxD { maxD = d }
-        }
-        guard maxD > minD else { return nil }
+        let minD: Float = 0.5
+        let maxD: Float = 5.0
+        guard depths.contains(where: { !$0.isNaN && $0 > 0 }) else { return nil }
 
-        // Center distance (5×5 sample)
         let cx = width / 2, cy = height / 2
         var distSum: Float = 0, distCount = 0
-        for dy in -2...2 {
-            for dx in -2...2 {
+        for dy in -5...5 {
+            for dx in -5...5 {
                 let x = cx + dx, y = cy + dy
                 guard x >= 0, x < width, y >= 0, y < height else { continue }
                 let d = depths[y * width + x]
