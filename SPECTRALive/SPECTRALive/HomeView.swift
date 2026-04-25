@@ -3,7 +3,6 @@ import SwiftUI
 enum AppDestination: Hashable {
     case liveDepth
     case mlDepth
-    case edgeDepth
 }
 
 struct HomeView: View {
@@ -31,17 +30,10 @@ struct HomeView: View {
 
                     modeButton(
                         title: "SPECTRANet",
-                        subtitle: "AI-enhanced dense depth",
+                        subtitle: "AI-enhanced depth + edge detection",
                         icon: "brain",
                         tint: .purple
                     ) { path.append(AppDestination.mlDepth) }
-
-                    modeButton(
-                        title: "Edge Depth",
-                        subtitle: "Object edges with metric depth",
-                        icon: "lines.measurement.horizontal",
-                        tint: .orange
-                    ) { path.append(AppDestination.edgeDepth) }
                 }
                 .padding(.horizontal, 28)
             }
@@ -55,10 +47,6 @@ struct HomeView: View {
                         .toolbar(.hidden, for: .navigationBar)
                 case .mlDepth:
                     MLDepthView()
-                        .navigationBarBackButtonHidden(true)
-                        .toolbar(.hidden, for: .navigationBar)
-                case .edgeDepth:
-                    EdgeDepthView()
                         .navigationBarBackButtonHidden(true)
                         .toolbar(.hidden, for: .navigationBar)
                 }
