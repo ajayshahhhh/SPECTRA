@@ -97,7 +97,10 @@ enum SPECTRANetProcessor {
         // Return nil so the overlay shows nothing rather than wrong depth.
         var validCount = 0
         for c in confLow where c == 2 { validCount += 1 }
-        guard Float(validCount) / Float(lH * lW) >= 0.01 else { return nil }
+        guard Float(validCount) / Float(lH * lW) >= 0.01 else {
+            prevDepths = nil  // Reset temporal smoothing buffer
+            return nil
+        }
 
         // Zero out non-high-confidence depth before bicubic upsample
         for i in 0..<lH * lW where confLow[i] < 1 { loDepth[i] = 0 }
@@ -165,24 +168,16 @@ enum SPECTRANetProcessor {
         }
         for i in 0..<count where confHigh[i] < 0.1 { clamped[i] = 0 }
 
+        // Temporal smoothing only for pixels with valid current depth
         if let prev = prevDepths, prev.count == count {
-            var alpha = emaAlpha
-            var blended = [Float](repeating: 0, count: count)
-            prev.withUnsafeBufferPointer { pBuf in
-                clamped.withUnsafeBufferPointer { cBuf in
-                    blended.withUnsafeMutableBufferPointer { bBuf in
-                        vDSP_vintb(pBuf.baseAddress!, 1,
-                                   cBuf.baseAddress!, 1,
-                                   &alpha,
-                                   bBuf.baseAddress!, 1,
-                                   vDSP_Length(count))
-                    }
+            let alpha = emaAlpha
+            for i in 0..<count {
+                // Only blend if current pixel has valid depth, otherwise use current (0)
+                if clamped[i] > 0 {
+                    clamped[i] = prev[i] * (1 - alpha) + clamped[i] * alpha
                 }
+                // If clamped[i] == 0, keep it at 0 (don't preserve old values)
             }
-            for i in 0..<count where clamped[i] == 0 {
-                blended[i] = prev[i]
-            }
-            clamped = blended
         }
         prevDepths = clamped
 
@@ -190,13 +185,11 @@ enum SPECTRANetProcessor {
             return nil
         }
 
-        let edgeResult = EdgeDepthProcessor.process(
-            capturedImage: frame.capturedImage,
-            depths: clamped, dW: W, dH: H,
-            detectObjects: false
-        )
+        // Skip edge detection for lower latency
+        let edgeResult: EdgeDepthResult? = nil
 
-        let rcW = 640, rcH = 480
+        // Reduced resolution for faster recoloring: 480×360 instead of 640×480
+        let rcW = 480, rcH = 360
         let rcDepths = vImageResampleFloat(clamped, srcW: W, srcH: H, dstW: rcW, dstH: rcH)
         let recolored = DepthProcessor.recolorCameraImage(
             capturedImage: frame.capturedImage,

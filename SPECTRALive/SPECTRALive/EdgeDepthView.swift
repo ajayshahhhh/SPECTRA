@@ -107,10 +107,10 @@ struct EdgeDepthView: View {
             // HUD
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
-                    modeBadge
                     Spacer()
                     if !model.detections.isEmpty {
                         detectionCountBadge(model.detections.count)
+                            .fixedSize()
                     }
                 }
                 .padding(.top, 56)
@@ -165,6 +165,7 @@ struct EdgeDepthView: View {
         .foregroundStyle(.black)
         .padding(.horizontal, 10).padding(.vertical, 5)
         .background(.white, in: Capsule())
+        .fixedSize()
     }
 
     private func detectionCountBadge(_ n: Int) -> some View {

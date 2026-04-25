@@ -164,9 +164,7 @@ enum DepthProcessor {
 
         let outW = 640, outH = 480
         let depths = resampleFloat(rawDepths, srcW: dW, srcH: dH, dstW: outW, dstH: outH)
-        let count = outW * outH
-
-        let minD: Float = 0.2, maxD: Float = 5.0, range = maxD - minD
+        let minD: Float = 0.2, maxD: Float = 5.0
 
         let cx = outW / 2, cy = outH / 2
         var distSum: Float = 0, distN = 0

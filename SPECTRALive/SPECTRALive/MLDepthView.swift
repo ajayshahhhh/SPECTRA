@@ -50,7 +50,7 @@ struct MLARViewContainer: UIViewRepresentable {
         private let model: MLDepthSessionModel
         nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
         nonisolated(unsafe) private var processing = false
-        private let processInterval: CFAbsoluteTime = 0.5
+        private let processInterval: CFAbsoluteTime = 1.0 / 25.0  // 25fps for faster updates
 
         init(model: MLDepthSessionModel) { self.model = model }
 
@@ -72,7 +72,7 @@ struct MLARViewContainer: UIViewRepresentable {
                 coordinator.processing = false
                 await MainActor.run {
                     if let r = result {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(.easeInOut(duration: 0.08)) {
                             model.depthImage   = r.depth.colorImage
                         }
                         model.centerDistance = trackingNormal ? r.depth.centerDistance : nil
@@ -80,6 +80,16 @@ struct MLARViewContainer: UIViewRepresentable {
                         model.maxDepth     = r.depth.maxDepth
                         model.edgeOverlay  = r.edge?.overlayImage
                         model.recoloredImage = r.recoloredImage
+                    } else {
+                        // Clear all overlays when no valid detection
+                        withAnimation(.easeInOut(duration: 0.08)) {
+                            model.depthImage = nil
+                        }
+                        model.centerDistance = nil
+                        model.minDepth = nil
+                        model.maxDepth = nil
+                        model.edgeOverlay = nil
+                        model.recoloredImage = nil
                     }
                     model.isProcessing = false
                     model.lastInferenceMs = ms
@@ -114,7 +124,7 @@ struct MLDepthView: View {
             if let recolored = model.recoloredImage {
                 Image(uiImage: recolored)
                     .resizable()
-                    .interpolation(.high)
+                    .interpolation(.medium)
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
@@ -153,9 +163,8 @@ struct MLDepthView: View {
 
             // HUD
             VStack(spacing: 0) {
-                // Top row: mode badge (left) + inference time (right)
+                // Top row: inference time (right)
                 HStack(alignment: .top) {
-                    modeBadge
                     Spacer()
                     VStack(alignment: .trailing, spacing: 6) {
                         if model.depthImage == nil {
@@ -165,9 +174,9 @@ struct MLDepthView: View {
                             infoBadge("\(ms) ms")
                         }
                     }
+                    .fixedSize()
                 }
                 .padding(.top, 56)
-                .padding(.leading, 24)
                 .padding(.trailing, 16)
 
                 distanceLabel.padding(.top, 10)
@@ -226,6 +235,7 @@ struct MLDepthView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(.white, in: Capsule())
+        .fixedSize()
     }
 
     private var loadingBadge: some View {
