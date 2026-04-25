@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import ARKit
 import RealityKit
 
@@ -43,7 +44,7 @@ struct MLARViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 
     final class Coordinator: NSObject, ARSessionDelegate {
-        nonisolated(unsafe) private let model: MLDepthSessionModel
+        private let model: MLDepthSessionModel
         nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
         // 2 fps dispatch rate — CoreML on Neural Engine runs ~150–300 ms per frame
         private let processInterval: CFAbsoluteTime = 0.5
@@ -150,7 +151,12 @@ struct MLDepthView: View {
 
                 distanceLabel.padding(.top, 10)
                 Spacer()
-
+                HStack {
+                    Spacer()
+                    colorScaleKey
+                }
+                .padding(.trailing, 12)
+                .padding(.bottom, 8)
                 HStack(spacing: 40) {
                     backButton
                     captureButton
@@ -159,11 +165,6 @@ struct MLDepthView: View {
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
                 .padding(.bottom, 48)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                colorScaleKey
-                    .padding(.trailing, 6)
-                    .padding(.bottom, 140)
             }
 
             // Toast

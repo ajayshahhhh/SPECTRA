@@ -48,6 +48,12 @@ struct ContentView: View {
                 distanceLabel
                     .padding(.top, 4)
                 Spacer()
+                HStack {
+                    Spacer()
+                    colorScaleKey
+                }
+                .padding(.trailing, 12)
+                .padding(.bottom, 8)
                 HStack(spacing: 40) {
                     backButton
                     captureButton
@@ -56,11 +62,6 @@ struct ContentView: View {
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
                 .padding(.bottom, 48)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                colorScaleKey
-                    .padding(.trailing, 6)
-                    .padding(.bottom, 140)
             }
 
             // ── Toast ─────────────────────────────────────────────────
