@@ -80,7 +80,7 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
         }
 
         let now = CFAbsoluteTimeGetCurrent()
-        let interval: CFAbsoluteTime = depthMode == .liveDepth ? 1.0 / 15.0 : 0.5
+        let interval: CFAbsoluteTime = 1.0 / 25.0
         guard now - lastProcessTime >= interval else { return }
         guard !processing else { return }
         processing = true
@@ -109,7 +109,12 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
                 }
             case .spectraNet:
                 if let result = await SPECTRANetProcessor.process(frame: frame) {
-                    if let cg = result.colorImage.cgImage {
+                    let blended = DepthProcessor.blendHeatmapWithCamera(
+                        heatmap: result.colorImage,
+                        capturedImage: frame.capturedImage
+                    )
+                    let source = blended ?? result.colorImage
+                    if let cg = source.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
                     }
                     centerDist = trackingNormal ? result.centerDistance : nil
