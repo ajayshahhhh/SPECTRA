@@ -19,7 +19,7 @@ struct HomeView: View {
                     modeButton(title: "Live Depth", subtitle: "LiDAR depth mapping", icon: "camera.fill") {
                         path.append(AppDestination.liveDepth)
                     }
-                    modeButton(title: "ML Depth", subtitle: "Model-trained LiDAR", icon: "brain") {
+                    modeButton(title: "SPECTRANet", subtitle: "Dense AI-enhanced depth", icon: "brain") {
                         path.append(AppDestination.mlDepth)
                     }
                 }
@@ -34,12 +34,9 @@ struct HomeView: View {
                         .navigationBarBackButtonHidden(true)
                         .toolbar(.hidden, for: .navigationBar)
                 case .mlDepth:
-                    MLDepthPlaceholderView()
+                    MLDepthView()
                         .navigationBarBackButtonHidden(true)
                         .toolbar(.hidden, for: .navigationBar)
-                        .overlay(alignment: .topLeading) {
-                            backButton
-                        }
                 }
             }
         }
@@ -73,34 +70,4 @@ struct HomeView: View {
         }
     }
 
-    private var backButton: some View {
-        Button { path.removeLast() } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(.black.opacity(0.5), in: Circle())
-        }
-        .padding(.top, 54)
-        .padding(.leading, 16)
-    }
-}
-
-struct MLDepthPlaceholderView: View {
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 16) {
-                Image(systemName: "brain")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white.opacity(0.3))
-                Text("Coming Soon")
-                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
-                Text("Model-trained LiDAR depth estimation")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-        }
-    }
 }

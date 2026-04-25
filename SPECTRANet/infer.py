@@ -22,11 +22,11 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms as T
 
-from mvg.dataset import (
+from spectranet.dataset import (
     DEPTH_MAX, DEPTH_MIN, IMAGENET_MEAN, IMAGENET_STD,
     NATIVE_LOW, MM_TO_M, _rotate_np,
 )
-from mvg.model import RGBGuidedDepthUpsampler
+from spectranet.model import RGBGuidedDepthUpsampler
 
 
 def parse_args():

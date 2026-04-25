@@ -39,8 +39,14 @@ struct ContentView: View {
 
             // ── HUD ───────────────────────────────────────────────────
             VStack {
+                HStack {
+                    lidarBadge
+                    Spacer()
+                }
+                .padding(.top, 56)
+                .padding(.horizontal, 16)
                 distanceLabel
-                    .padding(.top, 60)
+                    .padding(.top, 4)
                 Spacer()
                 HStack(spacing: 40) {
                     backButton
@@ -79,6 +85,20 @@ struct ContentView: View {
     }
 
     // MARK: - Subviews
+
+    private var lidarBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "scope")
+                .font(.system(size: 11, weight: .semibold))
+            Text("RAW LiDAR")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.white.opacity(0.18), in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+    }
 
     @ViewBuilder
     private var distanceLabel: some View {

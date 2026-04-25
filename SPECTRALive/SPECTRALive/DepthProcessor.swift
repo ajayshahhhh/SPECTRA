@@ -12,7 +12,8 @@ struct DepthResult {
 
 enum DepthProcessor {
 
-    private static let lut: [(UInt8, UInt8, UInt8)] = {
+    // Turbo-inspired HSV LUT: red (near) → yellow → green → cyan → blue (far)
+    static let lut: [(UInt8, UInt8, UInt8)] = {
         (0..<256).map { i in
             let t = Float(i) / 255.0
             let hue = t * (240.0 / 360.0)
@@ -35,6 +36,8 @@ enum DepthProcessor {
         }
     }()
 
+    // MARK: - Live LiDAR entry point
+
     nonisolated static func process(frame: ARFrame) -> DepthResult? {
         guard let sceneDepth = frame.sceneDepth else { return nil }
 
@@ -42,19 +45,18 @@ enum DepthProcessor {
         CVPixelBufferLockBaseAddress(depthMap, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(depthMap, .readOnly) }
 
-        let width = CVPixelBufferGetWidth(depthMap)
+        let width  = CVPixelBufferGetWidth(depthMap)
         let height = CVPixelBufferGetHeight(depthMap)
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(depthMap)
+        let bpr    = CVPixelBufferGetBytesPerRow(depthMap)
         guard let baseAddr = CVPixelBufferGetBaseAddress(depthMap) else { return nil }
         let count = width * height
 
         var depths = [Float](repeating: 0, count: count)
-        for row in 0..<height {
-            let src = baseAddr.advanced(by: row * bytesPerRow)
-                .bindMemory(to: Float.self, capacity: width)
-            depths.withUnsafeMutableBufferPointer { dst in
-                dst.baseAddress!.advanced(by: row * width)
-                    .update(from: src, count: width)
+        depths.withUnsafeMutableBufferPointer { dst in
+            for row in 0..<height {
+                memcpy(dst.baseAddress!.advanced(by: row * width),
+                       baseAddr.advanced(by: row * bpr),
+                       width * MemoryLayout<Float>.size)
             }
         }
 
@@ -62,85 +64,86 @@ enum DepthProcessor {
         if let confBuf = sceneDepth.confidenceMap {
             CVPixelBufferLockBaseAddress(confBuf, .readOnly)
             defer { CVPixelBufferUnlockBaseAddress(confBuf, .readOnly) }
-            let cw = CVPixelBufferGetWidth(confBuf)
-            let ch = CVPixelBufferGetHeight(confBuf)
+            let cw = CVPixelBufferGetWidth(confBuf), ch = CVPixelBufferGetHeight(confBuf)
             let cbr = CVPixelBufferGetBytesPerRow(confBuf)
             if cw == width, ch == height, let ca = CVPixelBufferGetBaseAddress(confBuf) {
                 confs = [UInt8](repeating: 0, count: count)
-                for row in 0..<height {
-                    let src = ca.advanced(by: row * cbr).bindMemory(to: UInt8.self, capacity: width)
-                    confs.withUnsafeMutableBufferPointer { dst in
-                        dst.baseAddress!.advanced(by: row * width)
-                            .update(from: src, count: width)
+                confs.withUnsafeMutableBufferPointer { dst in
+                    for row in 0..<height {
+                        memcpy(dst.baseAddress!.advanced(by: row * width),
+                               ca.advanced(by: row * cbr), width)
                     }
                 }
             }
         }
         let hasConf = confs.count == count
 
-        // Build a mask: valid = positive, finite, not low-confidence
-        // Replace invalid values with NaN so vDSP ignores them for min/max
-        var masked = depths
+        // Mask invalid pixels to NaN so colorize skips them
         for i in 0..<count {
-            let d = masked[i]
+            let d = depths[i]
             if d <= 0 || !d.isFinite || (hasConf && confs[i] == 0) {
-                masked[i] = .nan
+                depths[i] = .nan
             }
         }
 
+        return colorize(depths: depths, width: width, height: height)
+    }
+
+    // MARK: - Shared colorize (used by both LiDAR and SPECTRANet)
+    // Invalid pixels should be NaN or ≤ 0; they render as transparent.
+
+    nonisolated static func colorize(depths: [Float], width: Int, height: Int) -> DepthResult? {
+        let count = width * height
+        guard count == depths.count else { return nil }
+
         var minD: Float = .greatestFiniteMagnitude
         var maxD: Float = -.greatestFiniteMagnitude
-        for i in 0..<count {
-            let d = masked[i]
-            guard !d.isNaN else { continue }
+        for d in depths {
+            guard !d.isNaN, d > 0 else { continue }
             if d < minD { minD = d }
             if d > maxD { maxD = d }
         }
         guard maxD > minD else { return nil }
 
-        // Center distance
+        // Center distance (5×5 sample)
         let cx = width / 2, cy = height / 2
-        var distSum: Float = 0
-        var distCount = 0
+        var distSum: Float = 0, distCount = 0
         for dy in -2...2 {
             for dx in -2...2 {
                 let x = cx + dx, y = cy + dy
                 guard x >= 0, x < width, y >= 0, y < height else { continue }
-                let d = masked[y * width + x]
-                guard !d.isNaN else { continue }
-                distSum += d
-                distCount += 1
+                let d = depths[y * width + x]
+                guard !d.isNaN, d > 0 else { continue }
+                distSum += d; distCount += 1
             }
         }
         let centerDist: Float? = distCount > 0 ? distSum / Float(distCount) : nil
 
-        // Normalize valid pixels to 0..255 using vDSP
+        // Normalize valid pixels to 0..255
         let range = maxD - minD
         var negMin = -minD
         var scale = 255.0 / range as Float
         var normalized = [Float](repeating: 0, count: count)
-        vDSP_vsadd(masked, 1, &negMin, &normalized, 1, vDSP_Length(count))
+        vDSP_vsadd(depths, 1, &negMin, &normalized, 1, vDSP_Length(count))
         vDSP_vsmul(normalized, 1, &scale, &normalized, 1, vDSP_Length(count))
 
-        // Build RGBA using LUT
+        // LUT → RGBA
         var rgba = [UInt8](repeating: 0, count: count * 4)
         for i in 0..<count {
             let n = normalized[i]
-            guard !n.isNaN else { continue }
+            guard !n.isNaN, depths[i] > 0 else { continue }
             let idx = min(255, max(0, Int(n)))
             let (r, g, b) = lut[idx]
-            let base = i * 4
-            rgba[base]     = r
-            rgba[base + 1] = g
-            rgba[base + 2] = b
-            rgba[base + 3] = 255
+            rgba[i*4] = r; rgba[i*4+1] = g; rgba[i*4+2] = b; rgba[i*4+3] = 255
         }
 
         guard let image = makePortraitImage(rgba, width: width, height: height) else { return nil }
         return DepthResult(colorImage: image, centerDistance: centerDist, minDepth: minD, maxDepth: maxD)
     }
 
-    nonisolated private static func makePortraitImage(_ pixels: [UInt8], width: Int, height: Int) -> UIImage? {
+    // MARK: - Image creation
+
+    nonisolated static func makePortraitImage(_ pixels: [UInt8], width: Int, height: Int) -> UIImage? {
         var mutable = pixels
         return mutable.withUnsafeMutableBytes { ptr in
             guard let ctx = CGContext(
