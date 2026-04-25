@@ -40,15 +40,8 @@ struct ContentView: View {
 
             // ── HUD ───────────────────────────────────────────────────
             VStack {
-                HStack {
-                    lidarBadge
-                    Spacer()
-                }
-                .padding(.top, 56)
-                .padding(.leading, 24)
-                .padding(.trailing, 16)
                 distanceLabel
-                    .padding(.top, 4)
+                    .padding(.top, 60)
                 Spacer()
                 HStack(spacing: 40) {
                     backButton
@@ -100,6 +93,7 @@ struct ContentView: View {
         .padding(.vertical, 5)
         .background(.white.opacity(0.18), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+        .fixedSize()
     }
 
     @ViewBuilder

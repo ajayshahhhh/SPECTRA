@@ -41,7 +41,11 @@ struct DemoARViewContainer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
-        context.coordinator.depthMode = model.depthMode
+        if context.coordinator.depthMode != model.depthMode {
+            print("DemoView: Mode changing from \(context.coordinator.depthMode) to \(model.depthMode)")
+            context.coordinator.depthMode = model.depthMode
+            context.coordinator.resetProcessing()
+        }
     }
 }
 
@@ -50,11 +54,28 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
     nonisolated(unsafe) var depthMode: DemoDepthMode = .liveDepth
     nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
     nonisolated(unsafe) private var processing = false
+    nonisolated(unsafe) private var lastMode: DemoDepthMode = .liveDepth
 
     init(model: DemoSessionModel) { self.model = model }
 
+    nonisolated func resetProcessing() {
+        lastProcessTime = 0
+        processing = false
+    }
+
     nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
         model.latestFrame = frame
+
+        // Clear image immediately when mode changes
+        if depthMode != lastMode {
+            print("DemoCoordinator: Mode changed detected: \(lastMode) -> \(depthMode)")
+            lastMode = depthMode
+            Task { @MainActor [model = self.model] in
+                model.depthImage = nil
+                model.centerDistance = nil
+            }
+        }
+
         let now = CFAbsoluteTimeGetCurrent()
         let interval: CFAbsoluteTime = depthMode == .liveDepth ? 1.0 / 15.0 : 0.5
         guard now - lastProcessTime >= interval else { return }
@@ -74,6 +95,7 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
 
             switch mode {
             case .liveDepth:
+                print("DemoCoordinator: Processing with Live Depth mode")
                 if let result = DepthProcessor.recolorCamera(frame: frame) {
                     if let cg = result.colorImage.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
@@ -83,8 +105,9 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
                     maxD = result.maxDepth
                 }
             case .spectraNet:
+                print("DemoCoordinator: Processing with SPECTRANet mode")
                 if let result = SPECTRANetProcessor.process(frame: frame) {
-                    if let recolored = result.recoloredImage, let cg = recolored.cgImage {
+                    if let cg = result.depth.colorImage.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
                     }
                     centerDist = trackingNormal ? result.depth.centerDistance : nil
@@ -95,6 +118,9 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
 
             let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
             coordinator.processing = false
+
+            // Only update if mode hasn't changed since processing started
+            guard coordinator.depthMode == mode else { return }
 
             let finalImg = depthImg
             let finalDist = centerDist
@@ -146,6 +172,24 @@ struct DemoView: View {
                     .frame(width: geo.size.width / 2 - 2, height: geo.size.height)
                     .clipped()
                 }
+
+                // Crosshairs for both panes
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        // Left pane crosshair
+                        crosshair
+                            .frame(width: geo.size.width / 2, height: geo.size.height)
+
+                        Rectangle()
+                            .fill(.clear)
+                            .frame(width: 2)
+
+                        // Right pane crosshair
+                        crosshair
+                            .frame(width: geo.size.width / 2 - 2, height: geo.size.height)
+                    }
+                }
+                .allowsHitTesting(false)
 
                 // HUD overlay
                 VStack(spacing: 0) {
@@ -272,5 +316,23 @@ struct DemoView: View {
             .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.white.opacity(0.4), lineWidth: 1))
         }
         .shadow(color: .black.opacity(0.6), radius: 2)
+    }
+
+    private var crosshair: some View {
+        let size: CGFloat = 28, thick: CGFloat = 2, gap: CGFloat = 6
+        return ZStack {
+            HStack(spacing: gap * 2) {
+                Rectangle().frame(width: size, height: thick)
+                Rectangle().frame(width: size, height: thick)
+            }
+            VStack(spacing: gap * 2) {
+                Rectangle().frame(width: thick, height: size)
+                Rectangle().frame(width: thick, height: size)
+            }
+            Circle().frame(width: 4, height: 4)
+        }
+        .foregroundStyle(.white.opacity(0.8))
+        .shadow(color: .black.opacity(0.6), radius: 2)
+        .allowsHitTesting(false)
     }
 }
