@@ -1,9 +1,20 @@
 import SwiftUI
 import ARKit
 
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 struct ContentView: View {
     @StateObject private var model = ARSessionModel()
     @State private var isCapturing = false
+    @State private var showShareSheet = false
 
     var body: some View {
         ZStack {
@@ -22,13 +33,21 @@ struct ContentView: View {
                     .allowsHitTesting(false)
             }
 
+            // ── Crosshair ────────────────────────────────────────────
+            crosshair
+
             // ── HUD ───────────────────────────────────────────────────
             VStack {
                 distanceLabel
                     .padding(.top, 60)
                 Spacer()
-                captureButton
-                    .padding(.bottom, 48)
+                HStack(spacing: 40) {
+                    shareButton
+                        .opacity(model.capturedURLs.isEmpty ? 0 : 1)
+                    captureButton
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                .padding(.bottom, 48)
             }
 
             // ── Toast ─────────────────────────────────────────────────
@@ -47,6 +66,10 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.captureMessage)
+        .animation(.easeInOut(duration: 0.3), value: model.capturedURLs.isEmpty)
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: model.capturedURLs)
+        }
     }
 
     // MARK: - Subviews
@@ -60,16 +83,43 @@ struct ContentView: View {
             .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
     }
 
+    private var crosshair: some View {
+        let size: CGFloat = 28
+        let thickness: CGFloat = 2
+        let gap: CGFloat = 6
+        return ZStack {
+            // Horizontal lines
+            HStack(spacing: gap * 2) {
+                Rectangle().frame(width: size, height: thickness)
+                Rectangle().frame(width: size, height: thickness)
+            }
+            // Vertical lines
+            VStack(spacing: gap * 2) {
+                Rectangle().frame(width: thickness, height: size)
+                Rectangle().frame(width: thickness, height: size)
+            }
+            // Center dot
+            Circle().frame(width: 4, height: 4)
+        }
+        .foregroundStyle(.white.opacity(0.8))
+        .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 0)
+        .allowsHitTesting(false)
+    }
+
     private var captureButton: some View {
         Button {
             guard !isCapturing, let frame = model.latestFrame else { return }
             isCapturing = true
             Task {
-                let msg = await CaptureManager.capture(frame: frame)
-                model.captureMessage = msg
+                let result = await CaptureManager.capture(frame: frame)
+                model.captureMessage = result.message
+                model.capturedURLs = result.urls
                 isCapturing = false
+                if !result.urls.isEmpty {
+                    showShareSheet = true
+                }
                 try? await Task.sleep(for: .seconds(3))
-                if model.captureMessage == msg {
+                if model.captureMessage == result.message {
                     model.captureMessage = nil
                 }
             }
@@ -84,6 +134,18 @@ struct ContentView: View {
             }
         }
         .disabled(isCapturing)
+    }
+
+    private var shareButton: some View {
+        Button {
+            showShareSheet = true
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.2), in: Circle())
+        }
     }
 }
 
