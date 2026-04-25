@@ -1,4 +1,5 @@
 import ARKit
+import Combine
 import UIKit
 
 @MainActor
@@ -9,3 +10,4 @@ final class ARSessionModel: ObservableObject {
     // Written from ARKit background thread, read on main — guarded by caller logic
     nonisolated(unsafe) var latestFrame: ARFrame?
 }
+
