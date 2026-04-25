@@ -47,9 +47,13 @@ final class Coordinator: NSObject, ARSessionDelegate {
         guard let result = DepthProcessor.process(frame: frame) else { return }
         let image = result.colorImage
         let dist = result.centerDistance
+        let minD = result.minDepth
+        let maxD = result.maxDepth
         Task { @MainActor [model = self.model] in
             model.depthImage = image
             model.centerDistance = dist
+            model.minDepth = minD
+            model.maxDepth = maxD
         }
     }
 

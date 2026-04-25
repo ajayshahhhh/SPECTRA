@@ -6,6 +6,8 @@ import Accelerate
 struct DepthResult {
     let colorImage: UIImage
     let centerDistance: Float?
+    let minDepth: Float
+    let maxDepth: Float
 }
 
 enum DepthProcessor {
@@ -135,7 +137,7 @@ enum DepthProcessor {
         }
 
         guard let image = makePortraitImage(rgba, width: width, height: height) else { return nil }
-        return DepthResult(colorImage: image, centerDistance: centerDist)
+        return DepthResult(colorImage: image, centerDistance: centerDist, minDepth: minD, maxDepth: maxD)
     }
 
     nonisolated private static func makePortraitImage(_ pixels: [UInt8], width: Int, height: Int) -> UIImage? {

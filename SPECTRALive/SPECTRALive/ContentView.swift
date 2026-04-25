@@ -49,6 +49,11 @@ struct ContentView: View {
                 }
                 .padding(.bottom, 48)
             }
+            .overlay(alignment: .bottomTrailing) {
+                colorScaleKey
+                    .padding(.trailing, 6)
+                    .padding(.bottom, 140)
+            }
 
             // ── Toast ─────────────────────────────────────────────────
             if let msg = model.captureMessage {
@@ -76,7 +81,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var distanceLabel: some View {
-        let text = model.centerDistance.map { String(format: "%.2f m", $0) } ?? "— m"
+        let text = model.centerDistance.map { String(format: "%.3f m", $0) } ?? "— m"
         Text(text)
             .font(.system(size: 30, weight: .bold, design: .monospaced))
             .foregroundStyle(.white)
@@ -104,6 +109,46 @@ struct ContentView: View {
         .foregroundStyle(.white.opacity(0.8))
         .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 0)
         .allowsHitTesting(false)
+    }
+
+    private var colorScaleKey: some View {
+        let barHeight: CGFloat = 120
+        let minD = model.minDepth
+        let maxD = model.maxDepth
+        return HStack(alignment: .center, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 0) {
+                if let minD, let maxD {
+                    let mid = (minD + maxD) / 2
+                    Text(String(format: "%.1fm", minD))
+                    Spacer()
+                    Text(String(format: "%.1fm", mid))
+                    Spacer()
+                    Text(String(format: "%.1fm", maxD))
+                } else {
+                    Text("—")
+                    Spacer()
+                    Text("—")
+                    Spacer()
+                    Text("—")
+                }
+            }
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundStyle(.white)
+            .frame(height: barHeight)
+
+            LinearGradient(
+                colors: [.red, .yellow, .green, .cyan, .blue],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: 12, height: barHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+            )
+        }
+        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
     private var captureButton: some View {
