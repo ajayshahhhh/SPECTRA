@@ -54,13 +54,14 @@ struct EdgeARViewContainer: UIViewRepresentable {
             processing = true
             lastProcessTime = now
 
+            let trackingNormal = frame.camera.trackingState == .normal
             Task.detached(priority: .userInitiated) { [model = self.model, coordinator = self] in
                 let result = EdgeDepthProcessor.process(frame: frame)
                 coordinator.processing = false
                 await MainActor.run {
                     if let r = result {
                         model.overlayImage    = r.overlayImage
-                        model.centerDistance  = r.centerDistance
+                        model.centerDistance  = trackingNormal ? r.centerDistance : nil
                         model.minDepth        = r.minDepth
                         model.maxDepth        = r.maxDepth
                         model.detections      = r.detections
@@ -94,6 +95,8 @@ struct EdgeDepthView: View {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }

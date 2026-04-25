@@ -64,6 +64,7 @@ struct MLARViewContainer: UIViewRepresentable {
 
             Task { @MainActor [model = self.model] in model.isProcessing = true }
 
+            let trackingNormal = frame.camera.trackingState == .normal
             let t0 = now
             Task.detached(priority: .userInitiated) { [model = self.model] in
                 let result = await SPECTRANetProcessor.process(frame: frame)
@@ -74,7 +75,7 @@ struct MLARViewContainer: UIViewRepresentable {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             model.depthImage   = r.depth.colorImage
                         }
-                        model.centerDistance = r.depth.centerDistance
+                        model.centerDistance = trackingNormal ? r.depth.centerDistance : nil
                         model.minDepth     = r.depth.minDepth
                         model.maxDepth     = r.depth.maxDepth
                         model.edgeOverlay  = r.edge?.overlayImage
@@ -114,9 +115,10 @@ struct MLDepthView: View {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .ignoresSafeArea()
                     .opacity(0.6)
-                    .clipped()
                     .allowsHitTesting(false)
             } else {
                 Color.black.opacity(0.25).ignoresSafeArea()
@@ -127,6 +129,8 @@ struct MLDepthView: View {
                 Image(uiImage: edgeImg)
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
@@ -277,37 +281,6 @@ struct MLDepthView: View {
         .foregroundStyle(.white.opacity(0.8))
         .shadow(color: .black.opacity(0.6), radius: 2)
         .allowsHitTesting(false)
-    }
-
-    private var colorScaleKey: some View {
-        let barH: CGFloat = 120
-        let minD = model.minDepth, maxD = model.maxDepth
-        return HStack(alignment: .center, spacing: 4) {
-            VStack(alignment: .trailing, spacing: 0) {
-                if let minD, let maxD {
-                    let mid = (minD + maxD) / 2
-                    Text(String(format: "%.1fm", minD))
-                    Spacer()
-                    Text(String(format: "%.1fm", mid))
-                    Spacer()
-                    Text(String(format: "%.1fm", maxD))
-                } else {
-                    Text("—"); Spacer(); Text("—"); Spacer(); Text("—")
-                }
-            }
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .foregroundStyle(.white)
-            .frame(height: barH)
-
-            LinearGradient(
-                colors: [.red, .yellow, .green, .cyan, .blue],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(width: 12, height: barH)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.6), lineWidth: 1))
-        }
-        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
     // MARK: - Buttons

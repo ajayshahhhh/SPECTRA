@@ -46,7 +46,8 @@ final class Coordinator: NSObject, ARSessionDelegate {
         lastProcessTime = now
         guard let result = DepthProcessor.process(frame: frame) else { return }
         let image = result.colorImage
-        let dist = result.centerDistance
+        let trackingNormal = frame.camera.trackingState == .normal
+        let dist = trackingNormal ? result.centerDistance : nil
         let minD = result.minDepth
         let maxD = result.maxDepth
         Task { @MainActor [model = self.model] in

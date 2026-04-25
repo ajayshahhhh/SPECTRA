@@ -28,9 +28,10 @@ struct ContentView: View {
                 Image(uiImage: depthImage)
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .ignoresSafeArea()
                     .opacity(0.5)
-                    .clipped()
                     .allowsHitTesting(false)
             }
 
