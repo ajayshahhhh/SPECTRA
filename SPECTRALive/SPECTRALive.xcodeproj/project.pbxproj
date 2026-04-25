@@ -6,8 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BB0000012F9CB14F00EF0001 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB0000022F9CB14F00EF0001 /* ARKit.framework */; };
+		BB0000032F9CB14F00EF0001 /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB0000042F9CB14F00EF0001 /* RealityKit.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		3A18A2412F9CB14F00EF64D9 /* SPECTRALive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SPECTRALive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000022F9CB14F00EF0001 /* ARKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ARKit.framework; path = System/Library/Frameworks/ARKit.framework; sourceTree = SDKROOT; };
+		BB0000042F9CB14F00EF0001 /* RealityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = RealityKit.framework; path = System/Library/Frameworks/RealityKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +30,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB0000012F9CB14F00EF0001 /* ARKit.framework in Frameworks */,
+				BB0000032F9CB14F00EF0001 /* RealityKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -34,7 +43,17 @@
 			children = (
 				3A18A2432F9CB14F00EF64D9 /* SPECTRALive */,
 				3A18A2422F9CB14F00EF64D9 /* Products */,
+				BB0000052F9CB14F00EF0001 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		BB0000052F9CB14F00EF0001 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000022F9CB14F00EF0001 /* ARKit.framework */,
+				BB0000042F9CB14F00EF0001 /* RealityKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		3A18A2422F9CB14F00EF64D9 /* Products */ = {
@@ -258,6 +277,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRALive uses the camera for live AR depth visualization.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -290,6 +310,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRALive uses the camera for live AR depth visualization.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
