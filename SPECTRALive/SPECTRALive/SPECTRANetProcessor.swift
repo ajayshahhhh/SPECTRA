@@ -45,6 +45,13 @@ enum SPECTRANetProcessor {
         guard let url = Bundle.main.url(forResource: "spectranet_depth", withExtension: "mlmodelc") else { return nil }
         return try? MLModel(contentsOf: url, configuration: cfg)
     }()
+    static let modelH: Int = 768
+    static let modelW: Int = 1024
+
+    // ← Set this to your GX10's local IP address before building
+    static let serverURL = URL(string: "http://10.30.131.25:8000/infer")!
+
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Main entry point
 
@@ -58,30 +65,62 @@ enum SPECTRANetProcessor {
 
         // Read depth + confidence at native LiDAR resolution
         let depthMap = sceneDepth.depthMap
+    nonisolated static func process(frame: ARFrame) async -> DepthResult? {
+        guard let sceneDepth = frame.sceneDepth else { return nil }
+
+        guard
+            let jpegData = makeRGBJPEG(from: frame.capturedImage, H: modelH, W: modelW),
+            let (depthBytes, confBytes, lH, lW) = extractDepthConf(
+                depthMap: sceneDepth.depthMap,
+                confidenceMap: sceneDepth.confidenceMap)
+        else { return nil }
+
+        return await postInfer(jpeg: jpegData, depthBytes: depthBytes,
+                               confBytes: confBytes, lH: lH, lW: lW)
+    }
+
+    // MARK: - RGB → JPEG
+
+    private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
+        let ci = CIImage(cvPixelBuffer: pixelBuffer)
+        let sx = CGFloat(W) / ci.extent.width
+        let sy = CGFloat(H) / ci.extent.height
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+        guard let cgImg = ciContext.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.4)
+    }
+
+    // MARK: - Extract raw bytes from ARKit depth/confidence buffers
+
+    private static func extractDepthConf(
+        depthMap: CVPixelBuffer,
+        confidenceMap: CVPixelBuffer?
+    ) -> (depthBytes: Data, confBytes: Data, lH: Int, lW: Int)? {
+
         CVPixelBufferLockBaseAddress(depthMap, .readOnly)
-        let lW = CVPixelBufferGetWidth(depthMap)
-        let lH = CVPixelBufferGetHeight(depthMap)
-        let lBpr = CVPixelBufferGetBytesPerRow(depthMap)
-        guard let lBase = CVPixelBufferGetBaseAddress(depthMap) else {
+        let lW  = CVPixelBufferGetWidth(depthMap)
+        let lH  = CVPixelBufferGetHeight(depthMap)
+        let bpr = CVPixelBufferGetBytesPerRow(depthMap)
+        guard let base = CVPixelBufferGetBaseAddress(depthMap) else {
             CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
             return nil
         }
-        var loDepth = [Float](repeating: 0, count: lH * lW)
-        loDepth.withUnsafeMutableBufferPointer { dst in
+        var depthFlat = [Float](repeating: 0, count: lH * lW)
+        depthFlat.withUnsafeMutableBufferPointer { dst in
             for row in 0..<lH {
                 memcpy(dst.baseAddress!.advanced(by: row * lW),
-                       lBase.advanced(by: row * lBpr),
+                       base.advanced(by: row * bpr),
                        lW * MemoryLayout<Float>.size)
             }
         }
         CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
 
-        var confLow = [UInt8](repeating: 0, count: lH * lW)
-        if let cb = sceneDepth.confidenceMap {
+        var confFlat = [UInt8](repeating: 0, count: lH * lW)
+        if let cb = confidenceMap {
             CVPixelBufferLockBaseAddress(cb, .readOnly)
             let cbpr = CVPixelBufferGetBytesPerRow(cb)
             if let ca = CVPixelBufferGetBaseAddress(cb) {
-                confLow.withUnsafeMutableBufferPointer { dst in
+                confFlat.withUnsafeMutableBufferPointer { dst in
                     for row in 0..<lH {
                         memcpy(dst.baseAddress!.advanced(by: row * lW),
                                ca.advanced(by: row * cbpr), lW)
@@ -91,39 +130,51 @@ enum SPECTRANetProcessor {
             CVPixelBufferUnlockBaseAddress(cb, .readOnly)
         }
 
-        // ── Validity gate ─────────────────────────────────────────────
-        // If fewer than 1% of pixels have high-confidence LiDAR, the model
-        // has no real anchor and will hallucinate a depth (usually ~0.5–1 m).
-        // Return nil so the overlay shows nothing rather than wrong depth.
-        var validCount = 0
-        for c in confLow where c == 2 { validCount += 1 }
-        guard Float(validCount) / Float(lH * lW) >= 0.01 else {
-            prevDepths = nil  // Reset temporal smoothing buffer
-            return nil
+        let depthBytes = depthFlat.withUnsafeBufferPointer { Data(buffer: $0) }
+        let confBytes  = confFlat.withUnsafeBufferPointer { Data(buffer: $0) }
+        return (depthBytes, confBytes, lH, lW)
+    }
+
+    // MARK: - HTTP multipart POST → colorized JPEG + depth stats in headers
+
+    private static func postInfer(
+        jpeg: Data, depthBytes: Data, confBytes: Data, lH: Int, lW: Int
+    ) async -> DepthResult? {
+        let boundary = "SPECTRABoundary_\(UUID().uuidString.prefix(8))"
+        var body = Data()
+
+        func appendFile(_ name: String, _ data: Data, filename: String, mime: String) {
+            body += "--\(boundary)\r\n".utf8Data
+            body += "Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".utf8Data
+            body += "Content-Type: \(mime)\r\n\r\n".utf8Data
+            body += data
+            body += "\r\n".utf8Data
         }
 
-        // Zero out non-high-confidence depth before bicubic upsample
-        for i in 0..<lH * lW where confLow[i] < 1 { loDepth[i] = 0 }
-
-        // ── Depth inputs ──────────────────────────────────────────────
-        let bicubicFlat = vImageResampleFloat(loDepth, srcW: lW, srcH: lH, dstW: W, dstH: H)
-
-        var bicubicNorm = [Float](repeating: 0, count: count)
-        var zero: Float = 0, dmax = depthMax, invMax: Float = 1.0 / depthMax
-        bicubicFlat.withUnsafeBufferPointer { src in
-            bicubicNorm.withUnsafeMutableBufferPointer { dst in
-                vDSP_vclip(src.baseAddress!, 1, &zero, &dmax, dst.baseAddress!, 1, vDSP_Length(count))
-            }
+        func appendField(_ name: String, _ value: String) {
+            body += "--\(boundary)\r\n".utf8Data
+            body += "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8Data
+            body += value.utf8Data
+            body += "\r\n".utf8Data
         }
-        vDSP_vsmul(bicubicNorm, 1, &invMax, &bicubicNorm, 1, vDSP_Length(count))
 
-        let confFloat = confLow.map { $0 == 2 ? Float(1) : Float(0) }
-        let confHigh = vImageResampleFloat(confFloat, srcW: lW, srcH: lH, dstW: W, dstH: H)
+        appendFile("rgb",   jpeg,       filename: "rgb.jpg",   mime: "image/jpeg")
+        appendFile("depth", depthBytes, filename: "depth.bin", mime: "application/octet-stream")
+        appendFile("conf",  confBytes,  filename: "conf.bin",  mime: "application/octet-stream")
+        appendField("lH", "\(lH)")
+        appendField("lW", "\(lW)")
+        body += "--\(boundary)--\r\n".utf8Data
 
-        guard let bicubicArr = try? MLMultiArray(
-                shape: [1, 1, NSNumber(value: H), NSNumber(value: W)], dataType: .float32),
-              let confArr = try? MLMultiArray(
-                shape: [1, 1, NSNumber(value: H), NSNumber(value: W)], dataType: .float32)
+        var request = URLRequest(url: serverURL, timeoutInterval: 10)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)",
+                         forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200,
+              let cgImg = UIImage(data: data)?.cgImage
         guard let (depthBytes, confBytes, lH, lW) = extractDepthConf(
             depthMap: sceneDepth.depthMap,
             confidenceMap: sceneDepth.confidenceMap)
@@ -325,4 +376,20 @@ enum SPECTRANetProcessor {
                            minDepth: minD,
                            maxDepth: maxD)
     }
+        // Server returns a landscape JPEG (1024×768); apply .right to display as portrait
+        let colorImage = UIImage(cgImage: cgImg, scale: 1.0, orientation: .right)
+
+        let center = http.value(forHTTPHeaderField: "X-Center-Distance").flatMap(Float.init)
+        let minD   = Float(http.value(forHTTPHeaderField: "X-Min-Depth")  ?? "") ?? 0.5
+        let maxD   = Float(http.value(forHTTPHeaderField: "X-Max-Depth")  ?? "") ?? 10.0
+
+        return DepthResult(colorImage: colorImage, centerDistance: center,
+                           minDepth: minD, maxDepth: maxD)
+    }
+}
+
+// MARK: - Helpers
+
+private extension String {
+    var utf8Data: Data { Data(utf8) }
 }

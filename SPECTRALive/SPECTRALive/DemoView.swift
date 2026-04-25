@@ -25,6 +25,7 @@ final class DemoSessionModel: ObservableObject {
 
 struct DemoARViewContainer: UIViewRepresentable {
     let model: DemoSessionModel
+    let depthMode: DemoDepthMode
 
     func makeCoordinator() -> DemoCoordinator { DemoCoordinator(model: model) }
 
@@ -37,13 +38,15 @@ struct DemoARViewContainer: UIViewRepresentable {
             config.frameSemantics = .sceneDepth
         }
         arView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        context.coordinator.depthMode = depthMode
         return arView
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
-        if context.coordinator.depthMode != model.depthMode {
-            print("DemoView: Mode changing from \(context.coordinator.depthMode) to \(model.depthMode)")
-            context.coordinator.depthMode = model.depthMode
+        print("[DemoToggle] updateUIView called — container.depthMode=\(depthMode), coordinator.depthMode=\(context.coordinator.depthMode)")
+        if context.coordinator.depthMode != depthMode {
+            print("[DemoToggle] → mode CHANGED, updating coordinator to \(depthMode)")
+            context.coordinator.depthMode = depthMode
             context.coordinator.resetProcessing()
         }
     }
@@ -93,9 +96,9 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
             var minD: Float?
             var maxD: Float?
 
+            print("[DemoToggle] Processing frame with mode=\(mode), coordinator.depthMode=\(coordinator.depthMode)")
             switch mode {
             case .liveDepth:
-                print("DemoCoordinator: Processing with Live Depth mode")
                 if let result = DepthProcessor.recolorCamera(frame: frame) {
                     if let cg = result.colorImage.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
@@ -105,14 +108,13 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
                     maxD = result.maxDepth
                 }
             case .spectraNet:
-                print("DemoCoordinator: Processing with SPECTRANet mode")
-                if let result = SPECTRANetProcessor.process(frame: frame) {
-                    if let cg = result.depth.colorImage.cgImage {
+                if let result = await SPECTRANetProcessor.process(frame: frame) {
+                    if let cg = result.colorImage.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
                     }
-                    centerDist = trackingNormal ? result.depth.centerDistance : nil
-                    minD = result.depth.minDepth
-                    maxD = result.depth.maxDepth
+                    centerDist = trackingNormal ? result.centerDistance : nil
+                    minD = result.minDepth
+                    maxD = result.maxDepth
                 }
             }
 
@@ -150,7 +152,7 @@ struct DemoView: View {
             ZStack {
                 HStack(spacing: 0) {
                     // Left pane: raw camera feed
-                    DemoARViewContainer(model: model)
+                    DemoARViewContainer(model: model, depthMode: model.depthMode)
                         .frame(width: geo.size.width / 2)
                         .clipped()
 
@@ -236,6 +238,9 @@ struct DemoView: View {
                             }
                             .pickerStyle(.segmented)
                             .frame(width: 220)
+                            .onChange(of: model.depthMode) { oldVal, newVal in
+                                print("[DemoToggle] Picker changed: \(oldVal) → \(newVal)")
+                            }
 
                             if let ms = model.lastInferenceMs {
                                 Text("\(ms)ms")

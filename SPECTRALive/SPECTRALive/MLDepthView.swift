@@ -16,8 +16,6 @@ final class MLDepthSessionModel: ObservableObject {
     @Published var capturedURLs: [URL] = []
     @Published var isProcessing = false
     @Published var lastInferenceMs: Int?
-    @Published var edgeOverlay: UIImage?
-    @Published var recoloredImage: UIImage?
     nonisolated(unsafe) var latestFrame: ARFrame?
 }
 
@@ -48,19 +46,15 @@ struct MLARViewContainer: UIViewRepresentable {
 
     final class Coordinator: NSObject, ARSessionDelegate {
         private let model: MLDepthSessionModel
-        nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
-        nonisolated(unsafe) private var processing = false
-        private let processInterval: CFAbsoluteTime = 1.0 / 25.0  // 25fps for faster updates
+        // Prevents overlapping requests — next frame fires as soon as the previous completes
+        nonisolated(unsafe) private var isInFlight = false
 
         init(model: MLDepthSessionModel) { self.model = model }
 
         nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
             model.latestFrame = frame
-            let now = CFAbsoluteTimeGetCurrent()
-            guard now - lastProcessTime >= processInterval else { return }
-            guard !processing else { return }
-            processing = true
-            lastProcessTime = now
+            guard !isInFlight else { return }
+            isInFlight = true
 
             Task { @MainActor [model = self.model] in model.isProcessing = true }
 
@@ -68,32 +62,21 @@ struct MLARViewContainer: UIViewRepresentable {
             let t0 = now
             Task.detached(priority: .userInitiated) { [model = self.model] in
                 let result = await SPECTRANetProcessor.process(frame: frame)
+            let t0 = CFAbsoluteTimeGetCurrent()
+            Task.detached(priority: .userInitiated) { [model = self.model] in
+                let result = await SPECTRANetProcessor.process(frame: frame)
                 let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
-                coordinator.processing = false
                 await MainActor.run {
                     if let r = result {
-                        withAnimation(.easeInOut(duration: 0.08)) {
-                            model.depthImage   = r.depth.colorImage
-                        }
-                        model.centerDistance = trackingNormal ? r.depth.centerDistance : nil
-                        model.minDepth     = r.depth.minDepth
-                        model.maxDepth     = r.depth.maxDepth
-                        model.edgeOverlay  = r.edge?.overlayImage
-                        model.recoloredImage = r.recoloredImage
-                    } else {
-                        // Clear all overlays when no valid detection
-                        withAnimation(.easeInOut(duration: 0.08)) {
-                            model.depthImage = nil
-                        }
-                        model.centerDistance = nil
-                        model.minDepth = nil
-                        model.maxDepth = nil
-                        model.edgeOverlay = nil
-                        model.recoloredImage = nil
+                        model.depthImage     = r.colorImage
+                        model.centerDistance = r.centerDistance
+                        model.minDepth       = r.minDepth
+                        model.maxDepth       = r.maxDepth
                     }
-                    model.isProcessing = false
+                    model.isProcessing    = false
                     model.lastInferenceMs = ms
                 }
+                self.isInFlight = false
             }
         }
 
@@ -117,30 +100,28 @@ struct MLDepthView: View {
 
     var body: some View {
         ZStack {
-            // Camera feed
-            MLARViewContainer(model: model).ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
-            // Recolored camera heatmap
-            if let recolored = model.recoloredImage {
-                Image(uiImage: recolored)
-                    .resizable()
-                    .interpolation(.medium)
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
+            // ARKit session runs hidden — needed for LiDAR depth data
+            MLARViewContainer(model: model)
+                .ignoresSafeArea()
+                .opacity(0)
 
-            // Edge overlay (contours + bounding boxes)
-            if let edgeImg = model.edgeOverlay {
-                Image(uiImage: edgeImg)
+            // Full-screen heatmap (no camera feed blended in)
+            if let img = model.depthImage {
+                Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
                     .ignoresSafeArea()
+                    .clipped()
                     .allowsHitTesting(false)
+            } else {
+                VStack(spacing: 12) {
+                    ProgressView().tint(.white).scaleEffect(1.4)
+                    Text("Waiting for first frame…")
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
             }
 
             // Crosshair
@@ -163,8 +144,9 @@ struct MLDepthView: View {
 
             // HUD
             VStack(spacing: 0) {
-                // Top row: inference time (right)
+                // Top row: mode badge (left) + inference time (right)
                 HStack(alignment: .top) {
+                    modeBadge
                     Spacer()
                     VStack(alignment: .trailing, spacing: 6) {
                         if model.depthImage == nil {
@@ -174,10 +156,9 @@ struct MLDepthView: View {
                             infoBadge("\(ms) ms")
                         }
                     }
-                    .fixedSize()
                 }
                 .padding(.top, 56)
-                .padding(.trailing, 16)
+                .padding(.horizontal, 16)
 
                 distanceLabel.padding(.top, 10)
                 Spacer()
@@ -195,11 +176,6 @@ struct MLDepthView: View {
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
                 .padding(.bottom, 48)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                colorScaleKey
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 140)
             }
 
             // Toast
@@ -235,7 +211,6 @@ struct MLDepthView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(.white, in: Capsule())
-        .fixedSize()
     }
 
     private var loadingBadge: some View {
@@ -286,12 +261,9 @@ struct MLDepthView: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - Color scale
-
     private var colorScaleKey: some View {
-        let barHeight: CGFloat = 120
-        let minD = model.minDepth
-        let maxD = model.maxDepth
+        let barH: CGFloat = 120
+        let minD = model.minDepth, maxD = model.maxDepth
         return HStack(alignment: .center, spacing: 4) {
             VStack(alignment: .trailing, spacing: 0) {
                 if let minD, let maxD {
@@ -302,29 +274,20 @@ struct MLDepthView: View {
                     Spacer()
                     Text(String(format: "%.1fm", maxD))
                 } else {
-                    Text("—")
-                    Spacer()
-                    Text("—")
-                    Spacer()
-                    Text("—")
+                    Text("—"); Spacer(); Text("—"); Spacer(); Text("—")
                 }
             }
             .font(.system(size: 9, weight: .medium, design: .monospaced))
             .foregroundStyle(.white)
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(height: barHeight)
+            .frame(height: barH)
 
             LinearGradient(
                 colors: [.red, .yellow, .green, .cyan, .blue],
-                startPoint: .top,
-                endPoint: .bottom
+                startPoint: .top, endPoint: .bottom
             )
-            .frame(width: 12, height: barHeight)
+            .frame(width: 12, height: barH)
             .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(.white.opacity(0.6), lineWidth: 1)
-            )
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.6), lineWidth: 1))
         }
         .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
