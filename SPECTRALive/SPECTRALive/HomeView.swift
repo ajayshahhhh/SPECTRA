@@ -3,6 +3,7 @@ import SwiftUI
 enum AppDestination: Hashable {
     case liveDepth
     case mlDepth
+    case edgeDepth
 }
 
 struct HomeView: View {
@@ -11,19 +12,38 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $path) {
             VStack(spacing: 32) {
-                Text("SPECTRA")
-                    .font(.system(size: 42, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
-
-                VStack(spacing: 20) {
-                    modeButton(title: "Live Depth", subtitle: "LiDAR depth mapping", icon: "camera.fill") {
-                        path.append(AppDestination.liveDepth)
-                    }
-                    modeButton(title: "SPECTRANet", subtitle: "Dense AI-enhanced depth", icon: "brain") {
-                        path.append(AppDestination.mlDepth)
-                    }
+                VStack(spacing: 4) {
+                    Text("SPECTRA")
+                        .font(.system(size: 42, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Text("Depth Intelligence")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
-                .padding(.horizontal, 32)
+
+                VStack(spacing: 16) {
+                    modeButton(
+                        title: "Live Depth",
+                        subtitle: "Raw LiDAR heatmap",
+                        icon: "camera.fill",
+                        tint: .cyan
+                    ) { path.append(AppDestination.liveDepth) }
+
+                    modeButton(
+                        title: "SPECTRANet",
+                        subtitle: "AI-enhanced dense depth",
+                        icon: "brain",
+                        tint: .purple
+                    ) { path.append(AppDestination.mlDepth) }
+
+                    modeButton(
+                        title: "Edge Depth",
+                        subtitle: "Object edges with metric depth",
+                        icon: "lines.measurement.horizontal",
+                        tint: .orange
+                    ) { path.append(AppDestination.edgeDepth) }
+                }
+                .padding(.horizontal, 28)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black)
@@ -37,37 +57,45 @@ struct HomeView: View {
                     MLDepthView()
                         .navigationBarBackButtonHidden(true)
                         .toolbar(.hidden, for: .navigationBar)
+                case .edgeDepth:
+                    EdgeDepthView()
+                        .navigationBarBackButtonHidden(true)
+                        .toolbar(.hidden, for: .navigationBar)
                 }
             }
         }
     }
 
-    private func modeButton(title: String, subtitle: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func modeButton(
+        title: String, subtitle: String,
+        icon: String, tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             HStack(spacing: 16) {
                 Image(systemName: icon)
-                    .font(.system(size: 28))
-                    .frame(width: 44)
-                VStack(alignment: .leading, spacing: 4) {
+                    .font(.system(size: 24))
+                    .foregroundStyle(tint)
+                    .frame(width: 40)
+                VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
                     Text(subtitle)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.55))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.3))
             }
-            .foregroundStyle(.white)
-            .padding(20)
-            .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+            .padding(18)
+            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(tint.opacity(0.3), lineWidth: 1)
             )
         }
     }
-
 }

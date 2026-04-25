@@ -5,8 +5,9 @@ import Compression
 
 enum SPECTRANetProcessor {
 
-    static let modelH: Int = 768
-    static let modelW: Int = 1024
+    // Half the training resolution — 4× fewer pixels, ~3–4× faster on Neural Engine
+    static let modelH: Int = 384
+    static let modelW: Int = 512
 
     static let serverURL = URL(string: "ws://10.30.131.25:8000/ws")!
 
@@ -31,18 +32,110 @@ enum SPECTRANetProcessor {
 
         guard let jpegData = makeRGBJPEG(from: frame.capturedImage, H: modelH, W: modelW) else { return nil }
 
+        // Read depth + confidence at native LiDAR resolution
+        let depthMap = sceneDepth.depthMap
+        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
+        let lW = CVPixelBufferGetWidth(depthMap)
+        let lH = CVPixelBufferGetHeight(depthMap)
+        let lBpr = CVPixelBufferGetBytesPerRow(depthMap)
+        guard let lBase = CVPixelBufferGetBaseAddress(depthMap) else {
+            CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
+            return nil
+        }
+        var loDepth = [Float](repeating: 0, count: lH * lW)
+        loDepth.withUnsafeMutableBufferPointer { dst in
+            for row in 0..<lH {
+                memcpy(dst.baseAddress!.advanced(by: row * lW),
+                       lBase.advanced(by: row * lBpr),
+                       lW * MemoryLayout<Float>.size)
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
+
+        var confLow = [UInt8](repeating: 0, count: lH * lW)
+        if let cb = sceneDepth.confidenceMap {
+            CVPixelBufferLockBaseAddress(cb, .readOnly)
+            let cbpr = CVPixelBufferGetBytesPerRow(cb)
+            if let ca = CVPixelBufferGetBaseAddress(cb) {
+                confLow.withUnsafeMutableBufferPointer { dst in
+                    for row in 0..<lH {
+                        memcpy(dst.baseAddress!.advanced(by: row * lW),
+                               ca.advanced(by: row * cbpr), lW)
+                    }
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(cb, .readOnly)
+        }
+
+        // ── Validity gate ─────────────────────────────────────────────
+        // If fewer than 1% of pixels have high-confidence LiDAR, the model
+        // has no real anchor and will hallucinate a depth (usually ~0.5–1 m).
+        // Return nil so the overlay shows nothing rather than wrong depth.
+        var validCount = 0
+        for c in confLow where c == 2 { validCount += 1 }
+        guard Float(validCount) / Float(lH * lW) >= 0.01 else { return nil }
+
+        // Zero out non-high-confidence depth before bicubic upsample
+        for i in 0..<lH * lW where confLow[i] < 2 { loDepth[i] = 0 }
+
+        // ── Depth inputs ──────────────────────────────────────────────
+        let bicubicFlat = vImageResampleFloat(loDepth, srcW: lW, srcH: lH, dstW: W, dstH: H)
+
+        var bicubicNorm = [Float](repeating: 0, count: count)
+        var zero: Float = 0, dmax = depthMax, invMax: Float = 1.0 / depthMax
+        bicubicFlat.withUnsafeBufferPointer { src in
+            bicubicNorm.withUnsafeMutableBufferPointer { dst in
+                vDSP_vclip(src.baseAddress!, 1, &zero, &dmax, dst.baseAddress!, 1, vDSP_Length(count))
+            }
+        }
+        vDSP_vsmul(bicubicNorm, 1, &invMax, &bicubicNorm, 1, vDSP_Length(count))
+
+        var confFloat = confLow.map { $0 == 2 ? Float(1) : Float(0) }
+        let confHigh = vImageResampleFloat(confFloat, srcW: lW, srcH: lH, dstW: W, dstH: H)
+
+        guard let bicubicArr = try? MLMultiArray(
+                shape: [1, 1, NSNumber(value: H), NSNumber(value: W)], dataType: .float32),
+              let confArr = try? MLMultiArray(
+                shape: [1, 1, NSNumber(value: H), NSNumber(value: W)], dataType: .float32)
         guard let (depthBytes, confBytes, lH, lW) = extractDepthConf(
             depthMap: sceneDepth.depthMap,
             confidenceMap: sceneDepth.confidenceMap)
         else { return nil }
 
-        // Compress depth + conf with zlib before sending
-        guard
-            let depthZ = compress(depthBytes),
-            let confZ  = compress(confBytes)
-        else { return nil }
+        memcpy(bicubicArr.dataPointer, bicubicNorm, count * MemoryLayout<Float>.size)
+        memcpy(confArr.dataPointer, confHigh, count * MemoryLayout<Float>.size)
 
-        return await sendFrame(jpeg: jpegData, depthZ: depthZ, confZ: confZ, lH: lH, lW: lW)
+        // ── RGB input (vImage channel split — avoids per-pixel Swift loop) ──
+        guard let rgbArr = makeRGBArray(from: frame.capturedImage, H: H, W: W) else { return nil }
+
+        // ── Inference ─────────────────────────────────────────────────
+        guard let output = try? model.prediction(rgb: rgbArr, bicubic_norm: bicubicArr, conf_hi: confArr) else { return nil }
+
+        var depths = [Float](repeating: 0, count: count)
+        let predNorm = output.pred_norm
+        if predNorm.dataType == .float32 {
+            memcpy(&depths, predNorm.dataPointer, count * MemoryLayout<Float>.size)
+        } else if predNorm.dataType == .float16 {
+            var fp16 = [Float16](repeating: 0, count: count)
+            memcpy(&fp16, predNorm.dataPointer, count * MemoryLayout<Float16>.size)
+            vDSP.convertElements(of: fp16, to: &depths)
+        } else {
+            for i in 0..<count { depths[i] = predNorm[i].floatValue }
+        }
+
+        // Denormalize + clamp
+        var dmin = depthMin
+        depths.withUnsafeMutableBufferPointer { ptr in
+            vDSP_vsmul(ptr.baseAddress!, 1, &dmax, ptr.baseAddress!, 1, vDSP_Length(count))
+        }
+        var clamped = depths
+        depths.withUnsafeBufferPointer { src in
+            clamped.withUnsafeMutableBufferPointer { dst in
+                vDSP_vclip(src.baseAddress!, 1, &dmin, &dmax, dst.baseAddress!, 1, vDSP_Length(count))
+            }
+        }
+
+        return DepthProcessor.colorize(depths: clamped, width: W, height: H)
     }
 
     // MARK: - RGB → JPEG
