@@ -27,11 +27,11 @@ struct ContentView: View {
             if let depthImage = model.depthImage {
                 Image(uiImage: depthImage)
                     .resizable()
+                    .interpolation(.high)
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .ignoresSafeArea()
-                    .opacity(0.5)
                     .allowsHitTesting(false)
             }
 
@@ -45,7 +45,8 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.top, 56)
-                .padding(.horizontal, 16)
+                .padding(.leading, 24)
+                .padding(.trailing, 16)
                 distanceLabel
                     .padding(.top, 4)
                 Spacer()
@@ -60,7 +61,7 @@ struct ContentView: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 colorScaleKey
-                    .padding(.trailing, 6)
+                    .padding(.trailing, 12)
                     .padding(.bottom, 140)
             }
 
@@ -156,6 +157,7 @@ struct ContentView: View {
             }
             .font(.system(size: 9, weight: .medium, design: .monospaced))
             .foregroundStyle(.white)
+            .fixedSize(horizontal: true, vertical: false)
             .frame(height: barHeight)
 
             LinearGradient(

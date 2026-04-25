@@ -16,7 +16,7 @@ final class MLDepthSessionModel: ObservableObject {
     @Published var isProcessing = false
     @Published var lastInferenceMs: Int?
     @Published var edgeOverlay: UIImage?
-    @Published var detections: [EdgeDetection] = []
+    @Published var recoloredImage: UIImage?
     nonisolated(unsafe) var latestFrame: ARFrame?
 }
 
@@ -78,7 +78,7 @@ struct MLARViewContainer: UIViewRepresentable {
                         model.minDepth     = r.depth.minDepth
                         model.maxDepth     = r.depth.maxDepth
                         model.edgeOverlay  = r.edge?.overlayImage
-                        model.detections   = r.edge?.detections ?? []
+                        model.recoloredImage = r.recoloredImage
                     }
                     model.isProcessing = false
                     model.lastInferenceMs = ms
@@ -109,18 +109,16 @@ struct MLDepthView: View {
             // Camera feed
             MLARViewContainer(model: model).ignoresSafeArea()
 
-            // Depth overlay — slightly more opaque than LiDAR to show density
-            if let img = model.depthImage {
-                Image(uiImage: img)
+            // Recolored camera heatmap
+            if let recolored = model.recoloredImage {
+                Image(uiImage: recolored)
                     .resizable()
+                    .interpolation(.high)
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .ignoresSafeArea()
-                    .opacity(0.6)
                     .allowsHitTesting(false)
-            } else {
-                Color.black.opacity(0.25).ignoresSafeArea()
             }
 
             // Edge overlay (contours + bounding boxes)
@@ -165,13 +163,11 @@ struct MLDepthView: View {
                         if let ms = model.lastInferenceMs {
                             infoBadge("\(ms) ms")
                         }
-                        if !model.detections.isEmpty {
-                            detectionCountBadge(model.detections.count)
-                        }
                     }
                 }
                 .padding(.top, 56)
-                .padding(.horizontal, 16)
+                .padding(.leading, 24)
+                .padding(.trailing, 16)
 
                 distanceLabel.padding(.top, 10)
                 Spacer()
@@ -184,6 +180,11 @@ struct MLDepthView: View {
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
                 .padding(.bottom, 48)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                colorScaleKey
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 140)
             }
 
             // Toast
@@ -219,14 +220,6 @@ struct MLDepthView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(.white, in: Capsule())
-    }
-
-    private func detectionCountBadge(_ n: Int) -> some View {
-        Text("\(n) object\(n == 1 ? "" : "s")")
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.8))
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(.white.opacity(0.15), in: Capsule())
     }
 
     private var loadingBadge: some View {
@@ -275,6 +268,49 @@ struct MLDepthView: View {
         .foregroundStyle(.white.opacity(0.8))
         .shadow(color: .black.opacity(0.6), radius: 2)
         .allowsHitTesting(false)
+    }
+
+    // MARK: - Color scale
+
+    private var colorScaleKey: some View {
+        let barHeight: CGFloat = 120
+        let minD = model.minDepth
+        let maxD = model.maxDepth
+        return HStack(alignment: .center, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 0) {
+                if let minD, let maxD {
+                    let mid = (minD + maxD) / 2
+                    Text(String(format: "%.1fm", minD))
+                    Spacer()
+                    Text(String(format: "%.1fm", mid))
+                    Spacer()
+                    Text(String(format: "%.1fm", maxD))
+                } else {
+                    Text("—")
+                    Spacer()
+                    Text("—")
+                    Spacer()
+                    Text("—")
+                }
+            }
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundStyle(.white)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(height: barHeight)
+
+            LinearGradient(
+                colors: [.red, .yellow, .green, .cyan, .blue],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: 12, height: barHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+            )
+        }
+        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
     // MARK: - Buttons

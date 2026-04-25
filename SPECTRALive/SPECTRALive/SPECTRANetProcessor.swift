@@ -7,6 +7,7 @@ import UIKit
 struct SPECTRANetResult {
     let depth: DepthResult
     let edge: EdgeDepthResult?
+    let recoloredImage: UIImage?
 }
 
 enum SPECTRANetProcessor {
@@ -14,7 +15,7 @@ enum SPECTRANetProcessor {
     nonisolated static let modelH: Int = 768
     nonisolated static let modelW: Int = 1024
     nonisolated static let depthMax: Float = 10.0
-    nonisolated static let depthMin: Float = 0.5
+    nonisolated static let depthMin: Float = 0.3
 
     nonisolated private static let imagenetMean: (Float, Float, Float) = (0.485, 0.456, 0.406)
     nonisolated private static let imagenetStd:  (Float, Float, Float) = (0.229, 0.224, 0.225)
@@ -24,7 +25,7 @@ enum SPECTRANetProcessor {
         .workingColorSpace: CGColorSpaceCreateDeviceRGB()
     ])
 
-    nonisolated private static let emaAlpha: Float = 0.3
+    nonisolated private static let emaAlpha: Float = 0.6
     nonisolated(unsafe) private static var prevDepths: [Float]?
 
     nonisolated(unsafe) private static let sharedMLModel: MLModel? = {
@@ -162,6 +163,9 @@ enum SPECTRANetProcessor {
                     }
                 }
             }
+            for i in 0..<count where clamped[i] == 0 {
+                blended[i] = prev[i]
+            }
             clamped = blended
         }
         prevDepths = clamped
@@ -172,10 +176,18 @@ enum SPECTRANetProcessor {
 
         let edgeResult = EdgeDepthProcessor.process(
             capturedImage: frame.capturedImage,
-            depths: clamped, dW: W, dH: H
+            depths: clamped, dW: W, dH: H,
+            detectObjects: false
         )
 
-        return SPECTRANetResult(depth: depthResult, edge: edgeResult)
+        let rcW = 640, rcH = 480
+        let rcDepths = vImageResampleFloat(clamped, srcW: W, srcH: H, dstW: rcW, dstH: rcH)
+        let recolored = DepthProcessor.recolorCameraImage(
+            capturedImage: frame.capturedImage,
+            depths: rcDepths, outW: rcW, outH: rcH
+        )
+
+        return SPECTRANetResult(depth: depthResult, edge: edgeResult, recoloredImage: recolored)
     }
 
     // MARK: - RGB preprocessing via vImage (fast channel split + vDSP normalize)

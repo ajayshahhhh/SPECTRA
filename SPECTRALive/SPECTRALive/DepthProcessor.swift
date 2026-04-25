@@ -1,5 +1,6 @@
 import ARKit
 import UIKit
+import CoreImage
 import CoreVideo
 import Accelerate
 
@@ -35,6 +36,8 @@ enum DepthProcessor {
                     UInt8(min(255, b * 255)))
         }
     }()
+
+    nonisolated private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Live LiDAR entry point
 
@@ -96,7 +99,7 @@ enum DepthProcessor {
         let count = width * height
         guard count == depths.count else { return nil }
 
-        let minD: Float = 0.5
+        let minD: Float = 0.2
         let maxD: Float = 5.0
         guard depths.contains(where: { !$0.isNaN && $0 > 0 }) else { return nil }
 
@@ -135,6 +138,123 @@ enum DepthProcessor {
         return DepthResult(colorImage: image, centerDistance: centerDist, minDepth: minD, maxDepth: maxD)
     }
 
+    // MARK: - Camera recolor heatmap (fuses camera luminance with depth color)
+
+    nonisolated static func recolorCamera(frame: ARFrame) -> DepthResult? {
+        guard let sceneDepth = frame.sceneDepth else { return nil }
+
+        let depthMap = sceneDepth.depthMap
+        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
+        let dW = CVPixelBufferGetWidth(depthMap)
+        let dH = CVPixelBufferGetHeight(depthMap)
+        let dBpr = CVPixelBufferGetBytesPerRow(depthMap)
+        guard let dBase = CVPixelBufferGetBaseAddress(depthMap) else {
+            CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
+            return nil
+        }
+        var rawDepths = [Float](repeating: 0, count: dW * dH)
+        rawDepths.withUnsafeMutableBufferPointer { dst in
+            for row in 0..<dH {
+                memcpy(dst.baseAddress!.advanced(by: row * dW),
+                       dBase.advanced(by: row * dBpr),
+                       dW * MemoryLayout<Float>.size)
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
+
+        let outW = 640, outH = 480
+        let depths = resampleFloat(rawDepths, srcW: dW, srcH: dH, dstW: outW, dstH: outH)
+        let count = outW * outH
+
+        let minD: Float = 0.2, maxD: Float = 5.0, range = maxD - minD
+
+        let cx = outW / 2, cy = outH / 2
+        var distSum: Float = 0, distN = 0
+        for dy in -5...5 { for dx in -5...5 {
+            let x = cx + dx, y = cy + dy
+            guard x >= 0, x < outW, y >= 0, y < outH else { continue }
+            let d = depths[y * outW + x]
+            guard d > 0 && d.isFinite else { continue }
+            distSum += d; distN += 1
+        }}
+        let centerDist: Float? = distN > 0 ? distSum / Float(distN) : nil
+
+        guard let image = recolorCameraImage(
+            capturedImage: frame.capturedImage, depths: depths, outW: outW, outH: outH
+        ) else { return nil }
+        return DepthResult(colorImage: image, centerDistance: centerDist, minDepth: minD, maxDepth: maxD)
+    }
+
+    // MARK: - Camera recolor core (shared by LiDAR and SPECTRANet)
+
+    nonisolated static func recolorCameraImage(
+        capturedImage: CVPixelBuffer,
+        depths: [Float],
+        outW: Int,
+        outH: Int
+    ) -> UIImage? {
+        let count = outW * outH
+        guard depths.count == count else { return nil }
+
+        let minD: Float = 0.2, maxD: Float = 5.0, range = maxD - minD
+
+        let ci = CIImage(cvPixelBuffer: capturedImage)
+        let sx = CGFloat(outW) / ci.extent.width
+        let sy = CGFloat(outH) / ci.extent.height
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+
+        var camBuf: CVPixelBuffer?
+        let attrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: outW,
+            kCVPixelBufferHeightKey as String: outH,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:]
+        ]
+        CVPixelBufferCreate(nil, outW, outH, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &camBuf)
+        guard let camBuf else { return nil }
+        ciContext.render(scaled, to: camBuf)
+
+        CVPixelBufferLockBaseAddress(camBuf, .readOnly)
+        guard let camBase = CVPixelBufferGetBaseAddress(camBuf) else {
+            CVPixelBufferUnlockBaseAddress(camBuf, .readOnly)
+            return nil
+        }
+        let camBpr = CVPixelBufferGetBytesPerRow(camBuf)
+
+        var rgba = [UInt8](repeating: 0, count: count * 4)
+        for y in 0..<outH {
+            let row = camBase.advanced(by: y * camBpr).assumingMemoryBound(to: UInt8.self)
+            for x in 0..<outW {
+                let i = y * outW + x
+                let d = depths[i]
+                let cb = Float(row[x * 4])
+                let cg = Float(row[x * 4 + 1])
+                let cr = Float(row[x * 4 + 2])
+                let lum = (0.299 * cr + 0.587 * cg + 0.114 * cb) / 255.0
+
+                if d > 0.1 && d.isFinite {
+                    let t = max(0, min(1, (d - minD) / range))
+                    let idx = min(255, max(0, Int(t * 255)))
+                    let (lr, lg, lb) = lut[idx]
+                    let b = 0.3 + 0.7 * lum
+                    rgba[i * 4]     = UInt8(min(255, Float(lr) * b))
+                    rgba[i * 4 + 1] = UInt8(min(255, Float(lg) * b))
+                    rgba[i * 4 + 2] = UInt8(min(255, Float(lb) * b))
+                    rgba[i * 4 + 3] = 255
+                } else {
+                    let gray = UInt8(max(0, min(255, lum * 60)))
+                    rgba[i * 4] = gray
+                    rgba[i * 4 + 1] = gray
+                    rgba[i * 4 + 2] = gray
+                    rgba[i * 4 + 3] = 255
+                }
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(camBuf, .readOnly)
+
+        return makePortraitImage(rgba, width: outW, height: outH)
+    }
+
     // MARK: - Image creation
 
     nonisolated static func makePortraitImage(_ pixels: [UInt8], width: Int, height: Int) -> UIImage? {
@@ -151,5 +271,23 @@ enum DepthProcessor {
             ), let cg = ctx.makeImage() else { return nil }
             return UIImage(cgImage: cg, scale: 1.0, orientation: .right)
         }
+    }
+
+    nonisolated private static func resampleFloat(
+        _ src: [Float], srcW: Int, srcH: Int, dstW: Int, dstH: Int
+    ) -> [Float] {
+        var result = [Float](repeating: 0, count: dstH * dstW)
+        src.withUnsafeBytes { srcRaw in
+            result.withUnsafeMutableBytes { dstRaw in
+                var s = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: srcRaw.baseAddress!),
+                                      height: vImagePixelCount(srcH), width: vImagePixelCount(srcW),
+                                      rowBytes: srcW * MemoryLayout<Float>.size)
+                var d = vImage_Buffer(data: dstRaw.baseAddress!,
+                                      height: vImagePixelCount(dstH), width: vImagePixelCount(dstW),
+                                      rowBytes: dstW * MemoryLayout<Float>.size)
+                vImageScale_PlanarF(&s, &d, nil, vImage_Flags(kvImageHighQualityResampling))
+            }
+        }
+        return result
     }
 }
