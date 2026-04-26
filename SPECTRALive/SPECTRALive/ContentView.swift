@@ -43,6 +43,12 @@ struct ContentView: View {
                 distanceLabel
                     .padding(.top, 60)
                 Spacer()
+                HStack {
+                    Spacer()
+                    colorScaleKey
+                }
+                .padding(.trailing, 12)
+                .padding(.bottom, 8)
                 HStack(spacing: 40) {
                     backButton
                     captureButton
