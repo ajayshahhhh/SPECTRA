@@ -51,7 +51,7 @@ enum SPECTRANetProcessor {
     // ← Set this to your GX10's local IP address before building
     static let serverURL = URL(string: "http://10.30.131.25:8000/infer")!
 
-    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Main entry point
 
@@ -81,7 +81,7 @@ enum SPECTRANetProcessor {
 
     // MARK: - RGB → JPEG
 
-    private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
+    nonisolated private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
         let ci = CIImage(cvPixelBuffer: pixelBuffer)
         let sx = CGFloat(W) / ci.extent.width
         let sy = CGFloat(H) / ci.extent.height
@@ -92,7 +92,7 @@ enum SPECTRANetProcessor {
 
     // MARK: - Extract raw bytes from ARKit depth/confidence buffers
 
-    private static func extractDepthConf(
+    nonisolated private static func extractDepthConf(
         depthMap: CVPixelBuffer,
         confidenceMap: CVPixelBuffer?
     ) -> (depthBytes: Data, confBytes: Data, lH: Int, lW: Int)? {
