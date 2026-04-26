@@ -143,9 +143,8 @@ struct MLDepthView: View {
 
             // HUD
             VStack(spacing: 0) {
-                // Top row: mode badge (left) + inference time (right)
+                // Top row: inference time (right)
                 HStack(alignment: .top) {
-                    modeBadge
                     Spacer()
                     VStack(alignment: .trailing, spacing: 6) {
                         if model.depthImage == nil {

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug build)",
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
-      "Bash(xcodebuild clean *)"
+      "Bash(git branch *)",
+      "Bash(git restore *)",
+      "Bash(grep -E \"\\\\.swift$|^d\")"
     ]
   }
 }

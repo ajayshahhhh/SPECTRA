@@ -200,18 +200,13 @@ struct DemoView: View {
 
                 // HUD overlay
                 VStack(spacing: 0) {
-                    // Top bar: pane labels + branding
+                    // Top bar: branding only
                     HStack {
-                        paneLabel("CAMERA", icon: "camera.fill")
                         Spacer()
                         Text("SPECTRA")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.5))
                         Spacer()
-                        paneLabel(
-                            model.depthMode == .liveDepth ? "LiDAR DEPTH" : "SPECTRANet",
-                            icon: model.depthMode == .liveDepth ? "scope" : "brain"
-                        )
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
