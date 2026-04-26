@@ -10,7 +10,7 @@ enum SPECTRANetProcessor {
 
     static let serverURL = URL(string: "ws://10.30.131.25:8000/ws")!
 
-    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // Persistent WebSocket — opened once, reused for every frame
     private static var socket: URLSessionWebSocketTask? = nil
@@ -29,11 +29,11 @@ enum SPECTRANetProcessor {
     nonisolated static func process(frame: ARFrame) async -> DepthResult? {
         guard let sceneDepth = frame.sceneDepth else { return nil }
 
-        guard
-            let jpegData = makeRGBJPEG(from: frame.capturedImage, H: modelH, W: modelW),
-            let (depthBytes, confBytes, lH, lW) = extractDepthConf(
-                depthMap: sceneDepth.depthMap,
-                confidenceMap: sceneDepth.confidenceMap)
+        guard let jpegData = makeRGBJPEG(from: frame.capturedImage, H: modelH, W: modelW) else { return nil }
+
+        guard let (depthBytes, confBytes, lH, lW) = extractDepthConf(
+            depthMap: sceneDepth.depthMap,
+            confidenceMap: sceneDepth.confidenceMap)
         else { return nil }
 
         // Compress depth + conf with zlib before sending
