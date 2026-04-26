@@ -136,62 +136,6 @@ enum SPECTRANetProcessor {
         return DepthResult(colorImage: colorImage, centerDistance: center,
                            minDepth: minD, maxDepth: maxD)
     }
-
-    // MARK: - RGB → JPEG
-
-    nonisolated private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
-        let ci = CIImage(cvPixelBuffer: pixelBuffer)
-        let sx = CGFloat(W) / ci.extent.width
-        let sy = CGFloat(H) / ci.extent.height
-        let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
-        guard let cgImg = ciContext.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.4)
-    }
-
-    // MARK: - Extract raw bytes from ARKit depth/confidence buffers
-
-    nonisolated private static func extractDepthConf(
-        depthMap: CVPixelBuffer,
-        confidenceMap: CVPixelBuffer?
-    ) -> (depthBytes: Data, confBytes: Data, lH: Int, lW: Int)? {
-
-        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
-        let lW  = CVPixelBufferGetWidth(depthMap)
-        let lH  = CVPixelBufferGetHeight(depthMap)
-        let bpr = CVPixelBufferGetBytesPerRow(depthMap)
-        guard let base = CVPixelBufferGetBaseAddress(depthMap) else {
-            CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
-            return nil
-        }
-        var depthFlat = [Float](repeating: 0, count: lH * lW)
-        depthFlat.withUnsafeMutableBufferPointer { dst in
-            for row in 0..<lH {
-                memcpy(dst.baseAddress!.advanced(by: row * lW),
-                       base.advanced(by: row * bpr),
-                       lW * MemoryLayout<Float>.size)
-            }
-        }
-        CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
-
-        var confFlat = [UInt8](repeating: 0, count: lH * lW)
-        if let cb = confidenceMap {
-            CVPixelBufferLockBaseAddress(cb, .readOnly)
-            let cbpr = CVPixelBufferGetBytesPerRow(cb)
-            if let ca = CVPixelBufferGetBaseAddress(cb) {
-                confFlat.withUnsafeMutableBufferPointer { dst in
-                    for row in 0..<lH {
-                        memcpy(dst.baseAddress!.advanced(by: row * lW),
-                               ca.advanced(by: row * cbpr), lW)
-                    }
-                }
-            }
-            CVPixelBufferUnlockBaseAddress(cb, .readOnly)
-        }
-
-        let depthBytes = depthFlat.withUnsafeBufferPointer { Data(buffer: $0) }
-        let confBytes  = confFlat.withUnsafeBufferPointer { Data(buffer: $0) }
-        return (depthBytes, confBytes, lH, lW)
-    }
 }
 
 // MARK: - Helpers
