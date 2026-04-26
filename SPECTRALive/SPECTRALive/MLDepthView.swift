@@ -157,7 +157,7 @@ struct MLDepthView: View {
                 HStack(alignment: .top) {
                     Spacer()
 
-                    VStack(alignment: .trailing, spacing: 6) {
+                    VStack(alignment: .trailing, spacing: 8) {
                         if model.depthImage == nil {
                             loadingBadge
                         }
@@ -166,36 +166,36 @@ struct MLDepthView: View {
                         }
                     }
                 }
-                .padding(.top, 56)
-                .padding(.horizontal, 16)
+                .padding(.top, 64)
+                .padding(.horizontal, 20)
 
-                distanceLabel.padding(.top, 10)
+                distanceLabel.padding(.top, 14)
                 Spacer()
                 HStack {
                     Spacer()
                     colorScaleKey
                 }
-                .padding(.trailing, 12)
-                .padding(.bottom, 8)
-                HStack(spacing: 40) {
+                .padding(.trailing, 16)
+                .padding(.bottom, 12)
+                HStack(spacing: 50) {
                     backButton
                     captureButton
                     shareButton
                         .disabled(model.capturedURLs.isEmpty)
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
-                .padding(.bottom, 48)
+                .padding(.bottom, 60)
             }
 
             // Toast
             if let msg = model.captureMessage {
                 VStack {
                     Text(msg)
-                        .font(.caption)
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(.black.opacity(0.7), in: Capsule())
-                        .padding(.top, 110)
+                        .padding(.horizontal, 22).padding(.vertical, 12)
+                        .background(.black.opacity(0.75), in: Capsule())
+                        .padding(.top, 140)
                     Spacer()
                 }
                 .transition(.opacity)
@@ -223,21 +223,21 @@ struct MLDepthView: View {
     }
 
     private var loadingBadge: some View {
-        HStack(spacing: 5) {
-            ProgressView().scaleEffect(0.7).tint(.white)
+        HStack(spacing: 8) {
+            ProgressView().scaleEffect(1.0).tint(.white)
             Text("loading model…")
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(size: 15, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.7))
         }
-        .padding(.horizontal, 8).padding(.vertical, 4)
+        .padding(.horizontal, 16).padding(.vertical, 8)
         .background(.white.opacity(0.12), in: Capsule())
     }
 
     private func infoBadge(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(.system(size: 15, weight: .medium, design: .monospaced))
             .foregroundStyle(.white.opacity(0.75))
-            .padding(.horizontal, 8).padding(.vertical, 4)
+            .padding(.horizontal, 16).padding(.vertical, 8)
             .background(.white.opacity(0.12), in: Capsule())
     }
 
@@ -247,13 +247,13 @@ struct MLDepthView: View {
     private var distanceLabel: some View {
         let text = model.centerDistance.map { String(format: "%.3f m", $0) } ?? "— m"
         Text(text)
-            .font(.system(size: 30, weight: .bold, design: .monospaced))
+            .font(.system(size: 52, weight: .bold, design: .monospaced))
             .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
+            .shadow(color: .black.opacity(0.8), radius: 5, x: 0, y: 2)
     }
 
     private var crosshair: some View {
-        let size: CGFloat = 28, thick: CGFloat = 2, gap: CGFloat = 6
+        let size: CGFloat = 42, thick: CGFloat = 3.5, gap: CGFloat = 10
         return ZStack {
             HStack(spacing: gap * 2) {
                 Rectangle().frame(width: size, height: thick)
@@ -263,17 +263,17 @@ struct MLDepthView: View {
                 Rectangle().frame(width: thick, height: size)
                 Rectangle().frame(width: thick, height: size)
             }
-            Circle().frame(width: 4, height: 4)
+            Circle().frame(width: 7, height: 7)
         }
         .foregroundStyle(.white.opacity(0.8))
-        .shadow(color: .black.opacity(0.6), radius: 2)
+        .shadow(color: .black.opacity(0.6), radius: 4)
         .allowsHitTesting(false)
     }
 
     private var colorScaleKey: some View {
-        let barH: CGFloat = 120
+        let barH: CGFloat = 170
         let minD = model.minDepth, maxD = model.maxDepth
-        return HStack(alignment: .center, spacing: 4) {
+        return HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .trailing, spacing: 0) {
                 if let minD, let maxD {
                     let mid = (minD + maxD) / 2
@@ -286,7 +286,7 @@ struct MLDepthView: View {
                     Text("—"); Spacer(); Text("—"); Spacer(); Text("—")
                 }
             }
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .font(.system(size: 15, weight: .medium, design: .monospaced))
             .foregroundStyle(.white)
             .frame(height: barH)
 
@@ -294,11 +294,11 @@ struct MLDepthView: View {
                 colors: [.red, .yellow, .green, .cyan, .blue],
                 startPoint: .top, endPoint: .bottom
             )
-            .frame(width: 12, height: barH)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+            .frame(width: 18, height: barH)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.6), lineWidth: 2))
         }
-        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.7), radius: 5, x: 0, y: 2)
     }
 
     // MARK: - Buttons
@@ -318,8 +318,8 @@ struct MLDepthView: View {
             }
         } label: {
             ZStack {
-                Circle().fill(isCapturing ? Color.gray : Color.white).frame(width: 68, height: 68)
-                Circle().strokeBorder(.white, lineWidth: 3).frame(width: 80, height: 80)
+                Circle().fill(isCapturing ? Color.gray : Color.white).frame(width: 95, height: 95)
+                Circle().strokeBorder(.white, lineWidth: 5).frame(width: 112, height: 112)
             }
         }
         .disabled(isCapturing)
@@ -328,9 +328,9 @@ struct MLDepthView: View {
     private var backButton: some View {
         Button { dismiss() } label: {
             Image(systemName: "chevron.left")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: 64, height: 64)
                 .background(.white.opacity(0.2), in: Circle())
         }
     }
@@ -338,9 +338,9 @@ struct MLDepthView: View {
     private var shareButton: some View {
         Button { showShareSheet = true } label: {
             Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: 64, height: 64)
                 .background(.white.opacity(0.2), in: Circle())
         }
     }

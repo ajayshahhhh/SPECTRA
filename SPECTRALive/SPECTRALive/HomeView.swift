@@ -49,91 +49,111 @@ struct HomeView: View {
                     Spacer()
 
                     // Header
-                    VStack(spacing: 12) {
+                    VStack(spacing: 18) {
                         Text("SPECTRA")
-                            .font(.system(size: 52, weight: .black, design: .serif))
+                            .font(.system(size: 72, weight: .black, design: .serif))
                             .foregroundStyle(cream)
-                            .tracking(-0.02 * 52)
+                            .tracking(-0.02 * 72)
 
                         Text("SPARSE-TO-DENSE DEPTH COMPLETION")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundStyle(amber)
-                            .tracking(0.2 * 9)
+                            .tracking(0.2 * 13)
 
-                        // Backend toggle
+                        // Backend toggle switch
                         #if !targetEnvironment(simulator)
-                        HStack(spacing: 8) {
+                        HStack(spacing: 14) {
                             Text("Backend:")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(.system(size: 15, weight: .medium, design: .monospaced))
                                 .foregroundStyle(creamDim)
 
-                            Button {
-                                useZetic.toggle()
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: useZetic ? "brain" : "network")
-                                        .font(.system(size: 10, weight: .semibold))
-                                    Text(useZetic ? "Zetic" : "GX10")
-                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                }
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(useZetic ? Color.green : Color.orange, in: Capsule())
+                            HStack(spacing: 0) {
+                                // GX10 side
+                                Text("GX10")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(useZetic ? creamDim : .black)
+                                    .frame(width: 80, height: 38)
+                                    .background(useZetic ? Color.clear : Color.orange)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            useZetic = false
+                                        }
+                                    }
+
+                                // Zetic side
+                                Text("Zetic")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(useZetic ? .black : creamDim)
+                                    .frame(width: 80, height: 38)
+                                    .background(useZetic ? Color.green : Color.clear)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            useZetic = true
+                                        }
+                                    }
                             }
+                            .background(cardBorder)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().strokeBorder(cardBorder.opacity(0.5), lineWidth: 1))
                         }
-                        .padding(.top, 4)
+                        .padding(.top, 8)
                         #endif
                     }
-                    .padding(.bottom, 38)
+                    .padding(.bottom, 52)
 
-                    // Mode cards
-                    VStack(spacing: 10) {
-                        modeCard(
-                            label: "Live Depth",
-                            description: "Raw LiDAR heatmap",
-                            icon: "scope",
-                            borderColor: amber,
-                            destination: .liveDepth
-                        )
+                    // Mode cards - Live Depth and SPECTRANet in one row
+                    VStack(spacing: 16) {
+                        HStack(spacing: 16) {
+                            modeCard(
+                                label: "Live Depth",
+                                description: "Raw LiDAR heatmap",
+                                icon: "scope",
+                                borderColor: amber,
+                                destination: .liveDepth
+                            )
 
+                            modeCard(
+                                label: "SPECTRANet",
+                                description: "AI-enhanced depth",
+                                icon: "brain",
+                                borderColor: Color(hex: "c47bdb"),
+                                destination: .mlDepth,
+                                titleSize: 23
+                            )
+                        }
+
+                        // Demo card spanning full width
                         modeCard(
-                            label: "SPECTRANet",
-                            description: "AI-enhanced depth",
-                            icon: "brain",
-                            borderColor: Color(hex: "c47bdb"),
-                            destination: .mlDepth
+                            label: "Demo",
+                            description: "Side-by-side comparison view",
+                            icon: "rectangle.split.2x1",
+                            borderColor: red,
+                            destination: .demo
                         )
 
                         // Scope note
                         HStack(spacing: 0) {
                             Text("SCOPE: ")
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .font(.system(size: 13, weight: .medium, design: .monospaced))
                                 .foregroundStyle(amber)
                             Text("Indoor · 0.5–10m · CoreML")
-                                .font(.system(size: 9, weight: .light, design: .monospaced))
+                                .font(.system(size: 13, weight: .light, design: .monospaced))
                                 .foregroundStyle(creamDim)
                         }
-                        .padding(.vertical, 6)
-
-                        modeCard(
-                            label: "Demo",
-                            description: "Side-by-side view",
-                            icon: "rectangle.split.2x1",
-                            borderColor: red,
-                            destination: .demo
-                        )
+                        .padding(.vertical, 10)
                     }
-                    .padding(.horizontal, 50)
+                    .padding(.horizontal, 72)
 
                     Spacer()
 
                     // Footer
                     VStack(spacing: 6) {
                         Text("LA HACKS 2026")
-                            .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundStyle(creamDim)
-                            .tracking(0.15 * 8)
+                            .tracking(0.15 * 12)
                     }
                     .padding(.bottom, 32)
                 }
@@ -162,41 +182,43 @@ struct HomeView: View {
         description: String,
         icon: String,
         borderColor: Color,
-        destination: AppDestination
+        destination: AppDestination,
+        titleSize: CGFloat = 28
     ) -> some View {
         Button {
             path.append(destination)
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(borderColor)
 
-                VStack(spacing: 2) {
+                VStack(spacing: 6) {
                     Text(label)
-                        .font(.system(size: 16, weight: .semibold, design: .serif))
+                        .font(.system(size: titleSize, weight: .semibold, design: .serif))
                         .foregroundStyle(cream)
                     Text(description)
-                        .font(.system(size: 11, weight: .light))
+                        .font(.system(size: 18, weight: .light))
                         .foregroundStyle(creamDim)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.7)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 28)
             .background(bgCard)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(cardBorder, lineWidth: 1)
             )
             .overlay(
                 Rectangle()
                     .fill(borderColor)
-                    .frame(height: 2)
-                    .clipShape(RoundedRectangle(cornerRadius: 10)),
+                    .frame(height: 3)
+                    .clipShape(RoundedRectangle(cornerRadius: 16)),
                 alignment: .top
             )
         }

@@ -41,39 +41,39 @@ struct ContentView: View {
             // ── HUD ───────────────────────────────────────────────────
             VStack {
                 distanceLabel
-                    .padding(.top, 60)
+                    .padding(.top, 70)
                 Spacer()
                 HStack {
                     Spacer()
                     colorScaleKey
                 }
-                .padding(.trailing, 12)
-                .padding(.bottom, 8)
-                HStack(spacing: 40) {
+                .padding(.trailing, 16)
+                .padding(.bottom, 12)
+                HStack(spacing: 50) {
                     backButton
                     captureButton
                     shareButton
                         .disabled(model.capturedURLs.isEmpty)
                         .opacity(model.capturedURLs.isEmpty ? 0.3 : 1)
                 }
-                .padding(.bottom, 48)
+                .padding(.bottom, 60)
             }
             .overlay(alignment: .bottomTrailing) {
                 colorScaleKey
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 140)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 180)
             }
 
             // ── Toast ─────────────────────────────────────────────────
             if let msg = model.captureMessage {
                 VStack {
                     Text(msg)
-                        .font(.caption)
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.7), in: Capsule())
-                        .padding(.top, 110)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 12)
+                        .background(.black.opacity(0.75), in: Capsule())
+                        .padding(.top, 140)
                     Spacer()
                 }
                 .transition(.opacity)
@@ -106,15 +106,15 @@ struct ContentView: View {
     private var distanceLabel: some View {
         let text = model.centerDistance.map { String(format: "%.3f m", $0) } ?? "— m"
         Text(text)
-            .font(.system(size: 30, weight: .bold, design: .monospaced))
+            .font(.system(size: 52, weight: .bold, design: .monospaced))
             .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
+            .shadow(color: .black.opacity(0.8), radius: 5, x: 0, y: 2)
     }
 
     private var crosshair: some View {
-        let size: CGFloat = 28
-        let thickness: CGFloat = 2
-        let gap: CGFloat = 6
+        let size: CGFloat = 42
+        let thickness: CGFloat = 3.5
+        let gap: CGFloat = 10
         return ZStack {
             // Horizontal lines
             HStack(spacing: gap * 2) {
@@ -127,18 +127,18 @@ struct ContentView: View {
                 Rectangle().frame(width: thickness, height: size)
             }
             // Center dot
-            Circle().frame(width: 4, height: 4)
+            Circle().frame(width: 7, height: 7)
         }
         .foregroundStyle(.white.opacity(0.8))
-        .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 0)
+        .shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 0)
         .allowsHitTesting(false)
     }
 
     private var colorScaleKey: some View {
-        let barHeight: CGFloat = 120
+        let barHeight: CGFloat = 170
         let minD = model.minDepth
         let maxD = model.maxDepth
-        return HStack(alignment: .center, spacing: 4) {
+        return HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .trailing, spacing: 0) {
                 if let minD, let maxD {
                     let mid = (minD + maxD) / 2
@@ -155,7 +155,7 @@ struct ContentView: View {
                     Text("—")
                 }
             }
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .font(.system(size: 15, weight: .medium, design: .monospaced))
             .foregroundStyle(.white)
             .fixedSize(horizontal: true, vertical: false)
             .frame(height: barHeight)
@@ -165,14 +165,14 @@ struct ContentView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(width: 12, height: barHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: 18, height: barHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(.white.opacity(0.6), lineWidth: 2)
             )
         }
-        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.7), radius: 5, x: 0, y: 2)
     }
 
     private var captureButton: some View {
@@ -193,10 +193,10 @@ struct ContentView: View {
             ZStack {
                 Circle()
                     .fill(isCapturing ? Color.gray : Color.white)
-                    .frame(width: 68, height: 68)
+                    .frame(width: 95, height: 95)
                 Circle()
-                    .strokeBorder(.white, lineWidth: 3)
-                    .frame(width: 80, height: 80)
+                    .strokeBorder(.white, lineWidth: 5)
+                    .frame(width: 112, height: 112)
             }
         }
         .disabled(isCapturing)
@@ -205,9 +205,9 @@ struct ContentView: View {
     private var backButton: some View {
         Button { dismiss() } label: {
             Image(systemName: "chevron.left")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: 64, height: 64)
                 .background(.white.opacity(0.2), in: Circle())
         }
     }
@@ -217,9 +217,9 @@ struct ContentView: View {
             showShareSheet = true
         } label: {
             Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: 64, height: 64)
                 .background(.white.opacity(0.2), in: Circle())
         }
     }

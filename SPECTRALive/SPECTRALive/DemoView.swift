@@ -240,30 +240,30 @@ struct DemoView: View {
                     HStack {
                         Spacer()
                         Text("SPECTRA")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .font(.system(size: 22, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.5))
                         Spacer()
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 12)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
 
                     Spacer()
 
                     // Bottom: distance + controls
-                    VStack(spacing: 8) {
+                    VStack(spacing: 14) {
                         if let dist = model.centerDistance {
                             Text(String(format: "%.3f m", dist))
-                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .font(.system(size: 32, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white)
-                                .shadow(color: .black.opacity(0.8), radius: 3)
+                                .shadow(color: .black.opacity(0.8), radius: 5)
                         }
 
-                        HStack(spacing: 16) {
+                        HStack(spacing: 24) {
                             Button { dismiss() } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 24, weight: .semibold))
                                     .foregroundStyle(.white)
-                                    .frame(width: 36, height: 36)
+                                    .frame(width: 56, height: 56)
                                     .background(.white.opacity(0.2), in: Circle())
                             }
 
@@ -273,24 +273,24 @@ struct DemoView: View {
                                 }
                             }
                             .pickerStyle(.segmented)
-                            .frame(width: 220)
+                            .frame(width: 320)
                             .onChange(of: model.depthMode) { oldVal, newVal in
                                 print("[DemoToggle] Picker changed: \(oldVal) → \(newVal)")
                             }
 
                             if let ms = model.lastInferenceMs {
                                 Text("\(ms)ms")
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .font(.system(size: 16, weight: .medium, design: .monospaced))
                                     .foregroundStyle(.white.opacity(0.7))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(.black.opacity(0.4), in: Capsule())
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(.black.opacity(0.5), in: Capsule())
                             } else {
-                                Spacer().frame(width: 50)
+                                Spacer().frame(width: 80)
                             }
                         }
                     }
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 28)
                 }
 
                 // Color legend (right pane, bottom-right)
@@ -339,12 +339,12 @@ struct DemoView: View {
     }
 
     private var colorLegend: some View {
-        let barH: CGFloat = 80
-        return HStack(alignment: .center, spacing: 3) {
+        let barH: CGFloat = 120
+        return HStack(alignment: .center, spacing: 6) {
             VStack(alignment: .trailing, spacing: 0) {
                 Text("near"); Spacer(); Text("far")
             }
-            .font(.system(size: 8, weight: .medium, design: .monospaced))
+            .font(.system(size: 13, weight: .medium, design: .monospaced))
             .foregroundStyle(.white.opacity(0.7))
             .frame(height: barH)
 
@@ -352,15 +352,15 @@ struct DemoView: View {
                 colors: [.red, .yellow, .green, .cyan, .blue],
                 startPoint: .top, endPoint: .bottom
             )
-            .frame(width: 8, height: barH)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.white.opacity(0.4), lineWidth: 1))
+            .frame(width: 14, height: barH)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.white.opacity(0.5), lineWidth: 2))
         }
-        .shadow(color: .black.opacity(0.6), radius: 2)
+        .shadow(color: .black.opacity(0.7), radius: 4)
     }
 
     private var crosshair: some View {
-        let size: CGFloat = 28, thick: CGFloat = 2, gap: CGFloat = 6
+        let size: CGFloat = 38, thick: CGFloat = 3, gap: CGFloat = 9
         return ZStack {
             HStack(spacing: gap * 2) {
                 Rectangle().frame(width: size, height: thick)
@@ -370,10 +370,10 @@ struct DemoView: View {
                 Rectangle().frame(width: thick, height: size)
                 Rectangle().frame(width: thick, height: size)
             }
-            Circle().frame(width: 4, height: 4)
+            Circle().frame(width: 6, height: 6)
         }
         .foregroundStyle(.white.opacity(0.8))
-        .shadow(color: .black.opacity(0.6), radius: 2)
+        .shadow(color: .black.opacity(0.6), radius: 4)
         .allowsHitTesting(false)
     }
 }

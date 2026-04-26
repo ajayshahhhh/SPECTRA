@@ -2,6 +2,7 @@ import ARKit
 import UIKit
 import CoreImage
 import Foundation
+import Photos
 
 struct CaptureResult {
     var message: String
@@ -10,14 +11,14 @@ struct CaptureResult {
 
 enum CaptureManager {
 
-    /// Saves an RGB PNG and a raw float32 depth binary to the app's Documents directory.
+    /// Saves an RGB PNG to the camera roll and Documents directory.
     nonisolated static func capture(frame: ARFrame) async -> CaptureResult {
-        return performCapture(frame: frame)
+        return await performCapture(frame: frame)
     }
 
     // MARK: - Private
 
-    nonisolated private static func performCapture(frame: ARFrame) -> CaptureResult {
+    nonisolated private static func performCapture(frame: ARFrame) async -> CaptureResult {
         guard frame.sceneDepth != nil else {
             return CaptureResult(message: "No LiDAR data on this frame", urls: [])
         }
@@ -57,7 +58,34 @@ enum CaptureManager {
             return CaptureResult(message: "Save error: \(error.localizedDescription)", urls: [])
         }
 
-        return CaptureResult(message: "Saved \(stamp)", urls: [url])
+        // Save to camera roll
+        let photoSaved = await saveToCameraRoll(image: composite)
+        let message = photoSaved ? "Saved to Photos & Files" : "Saved to Files (Photos permission denied)"
+
+        return CaptureResult(message: message, urls: [url])
+    }
+
+    nonisolated private static func saveToCameraRoll(image: UIImage) async -> Bool {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+
+        if status == .notDetermined {
+            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            if newStatus != .authorized && newStatus != .limited {
+                return false
+            }
+        } else if status != .authorized && status != .limited {
+            return false
+        }
+
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }
+            return true
+        } catch {
+            print("Error saving to camera roll: \(error)")
+            return false
+        }
     }
 
     nonisolated private static func drawColorScale(in ctx: CGContext, imageSize: CGSize,

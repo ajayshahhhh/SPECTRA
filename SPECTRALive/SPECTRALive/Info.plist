@@ -18,6 +18,10 @@
 	<string>6.0</string>
 	<key>NSCameraUsageDescription</key>
 	<string>SPECTRALive uses the camera for live AR depth visualization.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SPECTRALive needs access to save captured depth images to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SPECTRALive needs access to save captured depth images to your photo library.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
