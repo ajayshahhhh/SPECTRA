@@ -3,7 +3,8 @@
     "allow": [
       "Bash(/usr/libexec/PlistBuddy -c \"Set :objects:3A18A24D2F9CB15100EF64D9:buildSettings:INFOPLIST_KEY_NSAppTransportSecurity:NSAllowsLocalNetworking YES\" SPECTRALive.xcodeproj/project.pbxproj)",
       "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' clean build)",
-      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' build)"
+      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' build)",
+      "Bash(xcodebuild *)"
     ]
   }
 }

@@ -13,7 +13,7 @@ struct DepthResult {
 enum DepthProcessor {
 
     // Turbo-inspired HSV LUT: red (near) → yellow → green → cyan → blue (far)
-    static let lut: [(UInt8, UInt8, UInt8)] = {
+    nonisolated static let lut: [(UInt8, UInt8, UInt8)] = {
         (0..<256).map { i in
             let t = Float(i) / 255.0
             let hue = t * (240.0 / 360.0)

@@ -31,7 +31,7 @@ struct ARViewContainer: UIViewRepresentable {
 
 final class Coordinator: NSObject, ARSessionDelegate {
     // nonisolated(unsafe): written from ARKit thread, read on main for capture
-    nonisolated(unsafe) private let model: ARSessionModel
+    private let model: ARSessionModel
     nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
     private let processInterval: CFAbsoluteTime = 1.0 / 15.0
 

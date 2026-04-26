@@ -47,7 +47,7 @@ enum SPECTRANetProcessor {
 
     // MARK: - RGB → JPEG
 
-    private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
+    nonisolated private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
         let ci = CIImage(cvPixelBuffer: pixelBuffer)
         let sx = CGFloat(W) / ci.extent.width
         let sy = CGFloat(H) / ci.extent.height
@@ -58,7 +58,7 @@ enum SPECTRANetProcessor {
 
     // MARK: - Extract raw bytes from ARKit depth/confidence buffers
 
-    private static func extractDepthConf(
+    nonisolated private static func extractDepthConf(
         depthMap: CVPixelBuffer,
         confidenceMap: CVPixelBuffer?
     ) -> (depthBytes: Data, confBytes: Data, lH: Int, lW: Int)? {
@@ -103,7 +103,7 @@ enum SPECTRANetProcessor {
 
     // MARK: - zlib compression using Apple's Compression framework
 
-    private static func compress(_ data: Data) -> Data? {
+    nonisolated private static func compress(_ data: Data) -> Data? {
         data.withUnsafeBytes { src -> Data? in
             guard let base = src.baseAddress else { return nil }
             let bound = compression_encode_scratch_buffer_size(COMPRESSION_ZLIB)
