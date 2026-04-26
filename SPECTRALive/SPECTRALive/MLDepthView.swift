@@ -61,7 +61,7 @@ struct MLARViewContainer: UIViewRepresentable {
 
             let t0 = now
             Task.detached(priority: .userInitiated) { [model = self.model] in
-                let result = SPECTRANetProcessor.process(frame: frame)
+                let result = await SPECTRANetProcessor.process(frame: frame)
                 let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
                 await MainActor.run {
                     if let r = result {
