@@ -12,7 +12,9 @@
       "Bash(git branch *)",
       "Bash(git restore *)",
       "Bash(grep -E \"\\.swift$|^d\")",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(python3 -c ' *)",
+      "Bash(xargs ls *)"
     ]
   }
 }

@@ -80,7 +80,7 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
         }
 
         let now = CFAbsoluteTimeGetCurrent()
-        let interval: CFAbsoluteTime = 1.0 / 25.0
+        let interval: CFAbsoluteTime = 1.0 / 60.0
         guard now - lastProcessTime >= interval else { return }
         guard !processing else { return }
         processing = true
