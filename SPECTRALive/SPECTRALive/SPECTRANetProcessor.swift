@@ -2,30 +2,93 @@ import ARKit
 import CoreImage
 import UIKit
 
+// ZeticMLange only available on real devices (not simulator)
+#if !targetEnvironment(simulator)
+import ZeticMLange
+#endif
+
+enum SPECTRANetBackend {
+    case gx10Server
+    #if !targetEnvironment(simulator)
+    case zeticMLange
+    #endif
+}
+
 enum SPECTRANetProcessor {
 
-    static let modelH: Int = 768
-    static let modelW: Int = 1024
+    // GX10 server accepts lower resolution for faster transfer
+    static let gx10_H: Int = 256
+    static let gx10_W: Int = 320
+
+    // ZeticMLange model requires full resolution (trained at 768×1024)
+    static let zeticH: Int = 768
+    static let zeticW: Int = 1024
+
+    // ImageNet normalization constants (from SPECTRA training)
+    static let IMAGENET_MEAN: [Float] = [0.485, 0.456, 0.406]
+    static let IMAGENET_STD: [Float] = [0.229, 0.224, 0.225]
+
+    // Depth normalization constants (matching server)
+    static let DEPTH_MAX: Float = 10.0
+    static let DEPTH_MIN: Float = 0.5
+
+    // Zetic calibration: empirically tuned to match Asus/server depth at >1m
+    // Based on measurement: Zetic 2.7m vs actual 3.2m → scale factor = 3.2/2.7 ≈ 1.19
+    static let ZETIC_DEPTH_SCALE: Float = 1  // Increase by 19% to correct underestimation
 
     // ← Set this to your GX10's local IP address before building
     static let serverURL = URL(string: "http://10.30.131.25:8000/infer")!
+
+    // ZeticMLange model (lazy loaded, device-only)
+    #if !targetEnvironment(simulator)
+    nonisolated(unsafe) private static var zeticModel: ZeticMLangeModel?
+    nonisolated(unsafe) private static var zeticModelLoading = false
+    #endif
 
     nonisolated private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Main entry point
 
-    nonisolated static func process(frame: ARFrame) async -> DepthResult? {
+    nonisolated static func process(frame: ARFrame, backend: SPECTRANetBackend = .gx10Server) async -> DepthResult? {
         guard let sceneDepth = frame.sceneDepth else { return nil }
 
-        guard
-            let jpegData = makeRGBJPEG(from: frame.capturedImage, H: modelH, W: modelW),
-            let (depthBytes, confBytes, lH, lW) = extractDepthConf(
-                depthMap: sceneDepth.depthMap,
-                confidenceMap: sceneDepth.confidenceMap)
-        else { return nil }
+        // Extract async properties first
+        let capturedImage = frame.capturedImage
+        let depthMap = sceneDepth.depthMap
+        let confidenceMap = sceneDepth.confidenceMap
 
-        return await postInfer(jpeg: jpegData, depthBytes: depthBytes,
-                               confBytes: confBytes, lH: lH, lW: lW)
+        switch backend {
+        case .gx10Server:
+            guard
+                let jpegData = makeRGBJPEG(from: capturedImage, H: gx10_H, W: gx10_W),
+                let (depthBytes, confBytes, lH, lW) = extractDepthConf(
+                    depthMap: depthMap,
+                    confidenceMap: confidenceMap)
+            else { return nil }
+
+            // Check if there are any valid depths (like live depth does)
+            guard hasValidDepths(depthBytes: depthBytes, confBytes: confBytes) else { return nil }
+
+            return await postInfer(jpeg: jpegData, depthBytes: depthBytes,
+                                   confBytes: confBytes, lH: lH, lW: lW)
+        #if !targetEnvironment(simulator)
+        case .zeticMLange:
+            // Zetic needs full resolution (768×1024)
+            guard
+                let jpegData = makeRGBJPEG(from: capturedImage, H: zeticH, W: zeticW),
+                let (depthBytes, confBytes, lH: lH, lW) = extractDepthConf(
+                    depthMap: depthMap,
+                    confidenceMap: confidenceMap)
+            else { return nil }
+
+            // Check if there are any valid depths (like live depth does)
+            guard hasValidDepths(depthBytes: depthBytes, confBytes: confBytes) else { return nil }
+
+            return await zeticInfer(capturedImage: capturedImage, jpegData: jpegData,
+                                    depthBytes: depthBytes, confBytes: confBytes,
+                                    lH: lH, lW: lW)
+        #endif
+        }
     }
 
     // MARK: - RGB → JPEG
@@ -36,7 +99,7 @@ enum SPECTRANetProcessor {
         let sy = CGFloat(H) / ci.extent.height
         let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
         guard let cgImg = ciContext.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.4)
+        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.85)
     }
 
     // MARK: - Extract raw bytes from ARKit depth/confidence buffers
@@ -82,6 +145,152 @@ enum SPECTRANetProcessor {
         let depthBytes = depthFlat.withUnsafeBufferPointer { Data(buffer: $0) }
         let confBytes  = confFlat.withUnsafeBufferPointer { Data(buffer: $0) }
         return (depthBytes, confBytes, lH, lW)
+    }
+
+    // MARK: - Check if depth data has any valid values (matching live depth behavior)
+
+    nonisolated private static func hasValidDepths(depthBytes: Data, confBytes: Data) -> Bool {
+        let depths = depthBytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        let confs = confBytes.withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
+
+        // Check if any depth value is valid (positive, finite, with non-zero confidence)
+        for i in 0..<depths.count {
+            let d = depths[i]
+            let c = confs[i]
+            if d > 0 && d.isFinite && c > 0 {
+                return true  // Found at least one valid depth
+            }
+        }
+        return false  // No valid depths found
+    }
+
+    // MARK: - Extract RGB tensor with ImageNet normalization
+
+    nonisolated private static func extractRGBTensor(from cgImage: CGImage) -> Data? {
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create bitmap context to extract pixels (RGBA format)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+
+        guard let context = CGContext(
+            data: &pixels,
+            width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        // Convert RGBA uint8 → RGB float32 [CHW layout]
+        var rgbArray = [Float](repeating: 0, count: 3 * height * width)
+
+        for c in 0..<3 {  // R, G, B channels
+            let channelOffset = c * height * width
+            for y in 0..<height {
+                for x in 0..<width {
+                    let pixelIdx = (y * width + x) * 4
+                    let rgbIdx = channelOffset + y * width + x
+
+                    // uint8 [0,255] → float32 [0,1]
+                    let pixelValue = Float(pixels[pixelIdx + c]) / 255.0
+
+                    // Apply ImageNet normalization: (x - mean) / std
+                    rgbArray[rgbIdx] = (pixelValue - IMAGENET_MEAN[c]) / IMAGENET_STD[c]
+                }
+            }
+        }
+
+        return rgbArray.withUnsafeBytes { Data($0) }
+    }
+
+    // MARK: - Upsample depth/confidence to target resolution
+
+    nonisolated private static func upsampleDepthConf(
+        depthBytes: Data, confBytes: Data, srcH: Int, srcW: Int, dstH: Int, dstW: Int
+    ) -> (depthData: Data, confData: Data)? {
+        // Bicubic upsampling (matching server.py bicubic interpolation)
+        var srcDepth = depthBytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        let srcConf = confBytes.withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
+
+        // Filter invalid depths BEFORE upsampling (prevents ~1m readings when camera covered)
+        for i in 0..<srcDepth.count {
+            let d = srcDepth[i]
+            let c = srcConf[i]
+            if !d.isFinite || d <= 0 || c == 0 {
+                srcDepth[i] = 0  // Set invalid depths to 0
+            }
+        }
+
+        var dstDepth = [Float](repeating: 0, count: dstH * dstW)
+        var dstConf = [Float](repeating: 0, count: dstH * dstW)  // Float32, not uint8!
+
+        let scaleY = Float(srcH) / Float(dstH)
+        let scaleX = Float(srcW) / Float(dstW)
+
+        // Bicubic interpolation (matching PyTorch's bicubic mode)
+        for dy in 0..<dstH {
+            for dx in 0..<dstW {
+                let sy = Float(dy) * scaleY
+                let sx = Float(dx) * scaleX
+
+                // Get 4×4 neighborhood for bicubic
+                let sy1 = Int(sy)
+                let sx1 = Int(sx)
+
+                var depth: Float = 0.0
+                var totalWeight: Float = 0.0
+
+                // Bicubic kernel (Catmull-Rom)
+                for j in -1...2 {
+                    for i in -1...2 {
+                        let srcY = max(0, min(srcH - 1, sy1 + j))
+                        let srcX = max(0, min(srcW - 1, sx1 + i))
+
+                        let dy = sy - Float(sy1 + j)
+                        let dx = sx - Float(sx1 + i)
+
+                        // Catmull-Rom weights
+                        let wy = cubicWeight(dy)
+                        let wx = cubicWeight(dx)
+                        let weight = wy * wx
+
+                        depth += srcDepth[srcY * srcW + srcX] * weight
+                        totalWeight += weight
+                    }
+                }
+
+                if totalWeight > 0 {
+                    depth /= totalWeight
+                }
+
+                // Normalize depth: (depth / DEPTH_MAX).clamp(0, 1)
+                dstDepth[dy * dstW + dx] = min(max(depth / DEPTH_MAX, 0.0), 1.0)
+
+                // Binary confidence mask: 1.0 if confidence >= 2, else 0.0 (bilinear for confidence)
+                let sy0 = Int(sy)
+                let sx0 = Int(sx)
+                let srcIdx = max(0, min(srcH - 1, sy0)) * srcW + max(0, min(srcW - 1, sx0))
+                dstConf[dy * dstW + dx] = srcConf[srcIdx] >= 2 ? 1.0 : 0.0
+            }
+        }
+
+        let depthData = dstDepth.withUnsafeBytes { Data($0) }
+        let confData = dstConf.withUnsafeBytes { Data($0) }
+        return (depthData, confData)
+    }
+
+    // Catmull-Rom cubic interpolation weight (matching PyTorch bicubic)
+    nonisolated private static func cubicWeight(_ x: Float) -> Float {
+        let absX = abs(x)
+        if absX <= 1.0 {
+            return 1.5 * absX * absX * absX - 2.5 * absX * absX + 1.0
+        } else if absX < 2.0 {
+            return -0.5 * absX * absX * absX + 2.5 * absX * absX - 4.0 * absX + 2.0
+        }
+        return 0.0
     }
 
     // MARK: - HTTP multipart POST → colorized JPEG + depth stats in headers
@@ -137,61 +346,156 @@ enum SPECTRANetProcessor {
                            minDepth: minD, maxDepth: maxD)
     }
 
-    // MARK: - RGB → JPEG
+    // MARK: - ZeticMLange on-device inference (device-only)
 
-    nonisolated private static func makeRGBJPEG(from pixelBuffer: CVPixelBuffer, H: Int, W: Int) -> Data? {
-        let ci = CIImage(cvPixelBuffer: pixelBuffer)
-        let sx = CGFloat(W) / ci.extent.width
-        let sy = CGFloat(H) / ci.extent.height
-        let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
-        guard let cgImg = ciContext.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.4)
-    }
+    #if !targetEnvironment(simulator)
+    private static func zeticInfer(
+        capturedImage: CVPixelBuffer,
+        jpegData: Data,
+        depthBytes: Data,
+        confBytes: Data,
+        lH: Int,
+        lW: Int
+    ) async -> DepthResult? {
+        // Load model if needed
+        if zeticModel == nil && !zeticModelLoading {
+            zeticModelLoading = true
+            do {
+                zeticModel = try ZeticMLangeModel(
+                    personalKey: "dev_af0d70e3dfe742c3bb6ece4b540f4919",
+                    name: "Linjfeng/SPECTRA",
+                    version: 1,
+                    modelMode: ModelMode.RUN_AUTO,
+                    onDownload: { progress in
+                        print("[Zetic] Download progress: \(Int(progress * 100))%")
+                    }
+                )
+                print("[Zetic] Model loaded successfully")
+            } catch {
+                print("[Zetic] Failed to load model: \(error)")
+                zeticModelLoading = false
+                return nil
+            }
+            zeticModelLoading = false
+        }
 
-    // MARK: - Extract raw bytes from ARKit depth/confidence buffers
-
-    nonisolated private static func extractDepthConf(
-        depthMap: CVPixelBuffer,
-        confidenceMap: CVPixelBuffer?
-    ) -> (depthBytes: Data, confBytes: Data, lH: Int, lW: Int)? {
-
-        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
-        let lW  = CVPixelBufferGetWidth(depthMap)
-        let lH  = CVPixelBufferGetHeight(depthMap)
-        let bpr = CVPixelBufferGetBytesPerRow(depthMap)
-        guard let base = CVPixelBufferGetBaseAddress(depthMap) else {
-            CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
+        guard let model = zeticModel else {
+            print("[Zetic] Model not available")
             return nil
         }
-        var depthFlat = [Float](repeating: 0, count: lH * lW)
-        depthFlat.withUnsafeMutableBufferPointer { dst in
-            for row in 0..<lH {
-                memcpy(dst.baseAddress!.advanced(by: row * lW),
-                       base.advanced(by: row * bpr),
-                       lW * MemoryLayout<Float>.size)
-            }
-        }
-        CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
 
-        var confFlat = [UInt8](repeating: 0, count: lH * lW)
-        if let cb = confidenceMap {
-            CVPixelBufferLockBaseAddress(cb, .readOnly)
-            let cbpr = CVPixelBufferGetBytesPerRow(cb)
-            if let ca = CVPixelBufferGetBaseAddress(cb) {
-                confFlat.withUnsafeMutableBufferPointer { dst in
-                    for row in 0..<lH {
-                        memcpy(dst.baseAddress!.advanced(by: row * lW),
-                               ca.advanced(by: row * cbpr), lW)
-                    }
-                }
+        // Prepare input tensors
+        do {
+            // Extract RGB tensor with ImageNet normalization
+            guard let uiImage = UIImage(data: jpegData),
+                  let cgImage = uiImage.cgImage,
+                  let rgbData = extractRGBTensor(from: cgImage) else {
+                print("[Zetic] Failed to extract RGB tensor")
+                return nil
             }
-            CVPixelBufferUnlockBaseAddress(cb, .readOnly)
-        }
 
-        let depthBytes = depthFlat.withUnsafeBufferPointer { Data(buffer: $0) }
-        let confBytes  = confFlat.withUnsafeBufferPointer { Data(buffer: $0) }
-        return (depthBytes, confBytes, lH, lW)
+            // Upsample depth/confidence to match RGB resolution
+            guard let (upsampledDepth, upsampledConf) = upsampleDepthConf(
+                depthBytes: depthBytes, confBytes: confBytes,
+                srcH: lH, srcW: lW, dstH: zeticH, dstW: zeticW
+            ) else {
+                print("[Zetic] Failed to upsample depth/confidence")
+                return nil
+            }
+
+            print("[Zetic] Input tensors: RGB[\(zeticH)×\(zeticW)], Depth[\(lH)×\(lW)→\(zeticH)×\(zeticW)]")
+
+            // Model expects: rgb, bicubic_depth, conf_hi (in that order)
+            let inputs: [Tensor] = [
+                // 1. RGB tensor (768×1024)
+                Tensor(data: rgbData, dataType: BuiltinDataType.float32, shape: [1, 3, zeticH, zeticW]),
+                // 2. Depth tensor (upsampled to 768×1024, normalized)
+                Tensor(data: upsampledDepth, dataType: BuiltinDataType.float32, shape: [1, 1, zeticH, zeticW]),
+                // 3. Binary confidence mask (1.0 where confidence >= 2, else 0.0)
+                Tensor(data: upsampledConf, dataType: BuiltinDataType.float32, shape: [1, 1, zeticH, zeticW])
+            ]
+
+            // Run inference with correct label
+            let outputs = try model.run(inputs: inputs)
+
+            // Parse output (assuming output is a colorized depth map)
+            guard let outputTensor = outputs.first else { return nil }
+
+            // 1. Validate shape: expecting [1, 1, H, W]
+            guard outputTensor.shape.count == 4,
+                  outputTensor.shape[0] == 1,
+                  outputTensor.shape[1] == 1
+            else {
+                print("[Zetic] Unexpected output shape: \(outputTensor.shape)")
+                return nil
+            }
+
+            let height = outputTensor.shape[2]
+            let width = outputTensor.shape[3]
+            let expectedCount = height * width
+
+            print("[Zetic] Output shape: [1, 1, \(height), \(width)]")
+
+            // 2. Extract float array from tensor data
+            let floatArray = outputTensor.data.withUnsafeBytes { ptr in
+                Array(ptr.bindMemory(to: Float.self))
+            }
+
+            guard floatArray.count == expectedCount else {
+                print("[Zetic] Data size mismatch: got \(floatArray.count), expected \(expectedCount)")
+                return nil
+            }
+
+            // Debug: Check output value range
+            let validValues = floatArray.filter { $0.isFinite }
+            if !validValues.isEmpty {
+                let minVal = validValues.min() ?? 0
+                let maxVal = validValues.max() ?? 0
+                let avgVal = validValues.reduce(0, +) / Float(validValues.count)
+                print("[Zetic] Output range: [\(minVal), \(maxVal)], avg: \(avgVal), valid: \(validValues.count)/\(floatArray.count)")
+            } else {
+                print("[Zetic] WARNING: No valid values in output!")
+            }
+
+            // 3. Denormalize: [0, 1] → meters, apply Zetic calibration, clamp to valid range
+            // ZETIC_DEPTH_SCALE compensates for model training differences vs server
+            var depthsInMeters = floatArray.map { normalized in
+                let meters = normalized * DEPTH_MAX * ZETIC_DEPTH_SCALE
+                guard meters.isFinite else { return Float.nan }
+                return min(max(meters, DEPTH_MIN), DEPTH_MAX)
+            }
+
+            let validDepths = depthsInMeters.filter { !$0.isNaN }
+            print("[Zetic] Depth range after denorm: valid \(validDepths.count)/\(depthsInMeters.count)")
+
+            // 4. Colorize using existing pipeline (reuses DepthProcessor.colorize)
+            guard let result = DepthProcessor.colorize(
+                depths: depthsInMeters,
+                width: width,
+                height: height
+            ) else {
+                print("[Zetic] Colorization failed")
+                return nil
+            }
+
+            // Debug: Check image size
+            if let cgImg = result.colorImage.cgImage {
+                print("[Zetic] ✓ Image created: \(cgImg.width)×\(cgImg.height), orientation: \(result.colorImage.imageOrientation.rawValue)")
+            } else {
+                print("[Zetic] ✗ WARNING: colorImage has no CGImage!")
+            }
+
+            print("[Zetic] Success - center: \(result.centerDistance?.description ?? "nil")m, " +
+                  "range: [\(result.minDepth), \(result.maxDepth)]m")
+
+            return result
+
+        } catch {
+            print("[Zetic] Inference failed: \(error)")
+            return nil
+        }
     }
+    #endif
 }
 
 // MARK: - Helpers

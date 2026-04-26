@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AD644B802F9DEE5400C1BFFD /* ZeticMLange in Frameworks */ = {isa = PBXBuildFile; productRef = AD644B7F2F9DEE5400C1BFFD /* ZeticMLange */; };
 		BB0000012F9CB14F00EF0001 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB0000022F9CB14F00EF0001 /* ARKit.framework */; };
 		BB0000032F9CB14F00EF0001 /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB0000042F9CB14F00EF0001 /* RealityKit.framework */; };
 /* End PBXBuildFile section */
@@ -17,9 +18,22 @@
 		BB0000042F9CB14F00EF0001 /* RealityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = RealityKit.framework; path = System/Library/Frameworks/RealityKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3A18A2502F9CB15100EF64D9 /* Exceptions for "SPECTRALive" folder in "SPECTRALive" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3A18A2402F9CB14F00EF64D9 /* SPECTRALive */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		3A18A2432F9CB14F00EF64D9 /* SPECTRALive */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3A18A2502F9CB15100EF64D9 /* Exceptions for "SPECTRALive" folder in "SPECTRALive" target */,
+			);
 			path = SPECTRALive;
 			sourceTree = "<group>";
 		};
@@ -30,6 +44,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AD644B802F9DEE5400C1BFFD /* ZeticMLange in Frameworks */,
 				BB0000012F9CB14F00EF0001 /* ARKit.framework in Frameworks */,
 				BB0000032F9CB14F00EF0001 /* RealityKit.framework in Frameworks */,
 			);
@@ -84,6 +99,7 @@
 			);
 			name = SPECTRALive;
 			packageProductDependencies = (
+				AD644B7F2F9DEE5400C1BFFD /* ZeticMLange */,
 			);
 			productName = SPECTRALive;
 			productReference = 3A18A2412F9CB14F00EF64D9 /* SPECTRALive.app */;
@@ -113,6 +129,9 @@
 			);
 			mainGroup = 3A18A2382F9CB14F00EF64D9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AD644B7E2F9DEE5400C1BFFD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3A18A2422F9CB14F00EF64D9 /* Products */;
 			projectDirPath = "";
@@ -276,9 +295,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7D287C84CR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRALive uses the camera for live AR depth visualization.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_FILE = SPECTRALive/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -310,9 +327,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7D287C84CR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRALive uses the camera for live AR depth visualization.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_FILE = SPECTRALive/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -357,6 +372,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AD644B7E2F9DEE5400C1BFFD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/zetic-ai/ZeticMLangeiOS.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AD644B7F2F9DEE5400C1BFFD /* ZeticMLange */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AD644B7E2F9DEE5400C1BFFD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */;
+			productName = ZeticMLange;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3A18A2392F9CB14F00EF64D9 /* Project object */;
 }

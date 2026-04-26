@@ -1,9 +1,13 @@
+SPECTRALive/.DS_Store
+website/.DS_Store
+
 # macOS
 .DS_Store
 
-# Xcode
-xcuserdata/
+# Xcode user-specific files
 *.xcuserstate
+**/xcuserdata/
+xcuserdata/
 
 # Python
 __pycache__/

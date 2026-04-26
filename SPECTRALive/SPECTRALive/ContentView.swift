@@ -184,9 +184,6 @@ struct ContentView: View {
                 model.captureMessage = result.message
                 model.capturedURLs = result.urls
                 isCapturing = false
-                if !result.urls.isEmpty {
-                    showShareSheet = true
-                }
                 try? await Task.sleep(for: .seconds(3))
                 if model.captureMessage == result.message {
                     model.captureMessage = nil

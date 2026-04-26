@@ -19,6 +19,21 @@ final class DemoSessionModel: ObservableObject {
     @Published var lastInferenceMs: Int?
     @Published var depthMode: DemoDepthMode = .liveDepth
     nonisolated(unsafe) var latestFrame: ARFrame?
+
+    // Backend selection now comes from AppStorage
+    var spectraNetBackend: SPECTRANetBackend {
+        let useZetic: Bool
+        if UserDefaults.standard.object(forKey: "useZetic") == nil {
+            useZetic = true  // Default to Zetic
+        } else {
+            useZetic = UserDefaults.standard.bool(forKey: "useZetic")
+        }
+        #if !targetEnvironment(simulator)
+        return useZetic ? .zeticMLange : .gx10Server
+        #else
+        return .gx10Server
+        #endif
+    }
 }
 
 // MARK: - AR container (drives camera display + depth processing)
@@ -49,6 +64,7 @@ struct DemoARViewContainer: UIViewRepresentable {
             context.coordinator.depthMode = depthMode
             context.coordinator.resetProcessing()
         }
+        // Backend is now read dynamically from UserDefaults in the session method
     }
 }
 
@@ -60,6 +76,21 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
     nonisolated(unsafe) private var lastMode: DemoDepthMode = .liveDepth
 
     init(model: DemoSessionModel) { self.model = model }
+
+    // Read backend from UserDefaults
+    nonisolated private var spectraNetBackend: SPECTRANetBackend {
+        let useZetic: Bool
+        if UserDefaults.standard.object(forKey: "useZetic") == nil {
+            useZetic = true  // Default to Zetic
+        } else {
+            useZetic = UserDefaults.standard.bool(forKey: "useZetic")
+        }
+        #if !targetEnvironment(simulator)
+        return useZetic ? .zeticMLange : .gx10Server
+        #else
+        return .gx10Server
+        #endif
+    }
 
     nonisolated func resetProcessing() {
         lastProcessTime = 0
@@ -80,7 +111,7 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
         }
 
         let now = CFAbsoluteTimeGetCurrent()
-        let interval: CFAbsoluteTime = 1.0 / 25.0
+        let interval: CFAbsoluteTime = 1.0 / 60.0
         guard now - lastProcessTime >= interval else { return }
         guard !processing else { return }
         processing = true
@@ -108,14 +139,19 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
                     maxD = result.maxDepth
                 }
             case .spectraNet:
-                if let result = await SPECTRANetProcessor.process(frame: frame) {
+                let backend = coordinator.spectraNetBackend
+                if let result = await SPECTRANetProcessor.process(frame: frame, backend: backend) {
                     let blended = DepthProcessor.blendHeatmapWithCamera(
                         heatmap: result.colorImage,
                         capturedImage: frame.capturedImage
                     )
+                    print("[DemoView] Blending result: \(blended != nil ? "✓ success" : "✗ failed, using raw heatmap")")
                     let source = blended ?? result.colorImage
                     if let cg = source.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
+                        print("[DemoView] Final image: \(cg.width)×\(cg.height)")
+                    } else {
+                        print("[DemoView] ✗ WARNING: source has no CGImage!")
                     }
                     centerDist = trackingNormal ? result.centerDistance : nil
                     minD = result.minDepth
@@ -200,18 +236,13 @@ struct DemoView: View {
 
                 // HUD overlay
                 VStack(spacing: 0) {
-                    // Top bar: pane labels + branding
+                    // Top bar: branding only
                     HStack {
-                        paneLabel("CAMERA", icon: "camera.fill")
                         Spacer()
                         Text("SPECTRA")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.5))
                         Spacer()
-                        paneLabel(
-                            model.depthMode == .liveDepth ? "LiDAR DEPTH" : "SPECTRANet",
-                            icon: model.depthMode == .liveDepth ? "scope" : "brain"
-                        )
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 12)

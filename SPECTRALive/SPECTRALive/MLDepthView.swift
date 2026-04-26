@@ -16,6 +16,14 @@ final class MLDepthSessionModel: ObservableObject {
     @Published var isProcessing = false
     @Published var lastInferenceMs: Int?
     nonisolated(unsafe) var latestFrame: ARFrame?
+
+    // Backend selection now comes from AppStorage
+    var useZetic: Bool {
+        if UserDefaults.standard.object(forKey: "useZetic") == nil {
+            return true  // Default to Zetic
+        }
+        return UserDefaults.standard.bool(forKey: "useZetic")
+    }
 }
 
 // MARK: - AR container for ML mode
@@ -59,7 +67,9 @@ struct MLARViewContainer: UIViewRepresentable {
 
             let t0 = CFAbsoluteTimeGetCurrent()
             Task.detached(priority: .userInitiated) { [model = self.model] in
-                let result = await SPECTRANetProcessor.process(frame: frame)
+                let useZetic = await model.useZetic
+                let backend: SPECTRANetBackend = useZetic ? .zeticMLange : .gx10Server
+                let result = await SPECTRANetProcessor.process(frame: frame, backend: backend)
                 let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
                 await MainActor.run {
                     if let r = result {
@@ -143,10 +153,10 @@ struct MLDepthView: View {
 
             // HUD
             VStack(spacing: 0) {
-                // Top row: mode badge (left) + inference time (right)
+                // Top row: inference time (right)
                 HStack(alignment: .top) {
-                    modeBadge
                     Spacer()
+
                     VStack(alignment: .trailing, spacing: 6) {
                         if model.depthImage == nil {
                             loadingBadge
