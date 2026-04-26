@@ -61,6 +61,10 @@ enum SPECTRANetProcessor {
                     depthMap: depthMap,
                     confidenceMap: confidenceMap)
             else { return nil }
+
+            // Check if there are any valid depths (like live depth does)
+            guard hasValidDepths(depthBytes: depthBytes, confBytes: confBytes) else { return nil }
+
             return await postInfer(jpeg: jpegData, depthBytes: depthBytes,
                                    confBytes: confBytes, lH: lH, lW: lW)
         #if !targetEnvironment(simulator)
@@ -68,10 +72,14 @@ enum SPECTRANetProcessor {
             // Zetic needs full resolution (768×1024)
             guard
                 let jpegData = makeRGBJPEG(from: capturedImage, H: zeticH, W: zeticW),
-                let (depthBytes, confBytes, lH, lW) = extractDepthConf(
+                let (depthBytes, confBytes, lH: lH, lW) = extractDepthConf(
                     depthMap: depthMap,
                     confidenceMap: confidenceMap)
             else { return nil }
+
+            // Check if there are any valid depths (like live depth does)
+            guard hasValidDepths(depthBytes: depthBytes, confBytes: confBytes) else { return nil }
+
             return await zeticInfer(capturedImage: capturedImage, jpegData: jpegData,
                                     depthBytes: depthBytes, confBytes: confBytes,
                                     lH: lH, lW: lW)
@@ -135,6 +143,23 @@ enum SPECTRANetProcessor {
         return (depthBytes, confBytes, lH, lW)
     }
 
+    // MARK: - Check if depth data has any valid values (matching live depth behavior)
+
+    nonisolated private static func hasValidDepths(depthBytes: Data, confBytes: Data) -> Bool {
+        let depths = depthBytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        let confs = confBytes.withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
+
+        // Check if any depth value is valid (positive, finite, with non-zero confidence)
+        for i in 0..<depths.count {
+            let d = depths[i]
+            let c = confs[i]
+            if d > 0 && d.isFinite && c > 0 {
+                return true  // Found at least one valid depth
+            }
+        }
+        return false  // No valid depths found
+    }
+
     // MARK: - Extract RGB tensor with ImageNet normalization
 
     nonisolated private static func extractRGBTensor(from cgImage: CGImage) -> Data? {
@@ -183,8 +208,17 @@ enum SPECTRANetProcessor {
         depthBytes: Data, confBytes: Data, srcH: Int, srcW: Int, dstH: Int, dstW: Int
     ) -> (depthData: Data, confData: Data)? {
         // Simple bilinear upsampling
-        let srcDepth = depthBytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        var srcDepth = depthBytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
         let srcConf = confBytes.withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
+
+        // Filter invalid depths BEFORE upsampling (prevents ~1m readings when camera covered)
+        for i in 0..<srcDepth.count {
+            let d = srcDepth[i]
+            let c = srcConf[i]
+            if !d.isFinite || d <= 0 || c == 0 {
+                srcDepth[i] = 0  // Set invalid depths to 0
+            }
+        }
 
         var dstDepth = [Float](repeating: 0, count: dstH * dstW)
         var dstConf = [Float](repeating: 0, count: dstH * dstW)  // Float32, not uint8!
@@ -372,18 +406,36 @@ enum SPECTRANetProcessor {
             print("[Zetic] Output shape: [1, 1, \(height), \(width)]")
 
             // 2. Extract float array from tensor data
-            let floatArray = DataUtils.dataToFloatArray(outputTensor.data)
+            let floatArray = outputTensor.data.withUnsafeBytes { ptr in
+                Array(ptr.bindMemory(to: Float.self))
+            }
 
             guard floatArray.count == expectedCount else {
                 print("[Zetic] Data size mismatch: got \(floatArray.count), expected \(expectedCount)")
                 return nil
             }
 
-            // 3. Denormalize: [0, 1] → meters (matching server behavior)
+            // Debug: Check output value range
+            let validValues = floatArray.filter { $0.isFinite }
+            if !validValues.isEmpty {
+                let minVal = validValues.min() ?? 0
+                let maxVal = validValues.max() ?? 0
+                let avgVal = validValues.reduce(0, +) / Float(validValues.count)
+                print("[Zetic] Output range: [\(minVal), \(maxVal)], avg: \(avgVal), valid: \(validValues.count)/\(floatArray.count)")
+            } else {
+                print("[Zetic] WARNING: No valid values in output!")
+            }
+
+            // 3. Denormalize: [0, 1] → meters, clamp to valid range
+            // Clamp instead of filtering so close objects show as red (not black)
             var depthsInMeters = floatArray.map { normalized in
                 let meters = normalized * DEPTH_MAX
-                return (meters >= DEPTH_MIN && meters.isFinite) ? meters : Float.nan
+                guard meters.isFinite else { return Float.nan }
+                return min(max(meters, DEPTH_MIN), DEPTH_MAX)
             }
+
+            let validDepths = depthsInMeters.filter { !$0.isNaN }
+            print("[Zetic] Depth range after denorm: valid \(validDepths.count)/\(depthsInMeters.count)")
 
             // 4. Colorize using existing pipeline (reuses DepthProcessor.colorize)
             guard let result = DepthProcessor.colorize(
@@ -393,6 +445,13 @@ enum SPECTRANetProcessor {
             ) else {
                 print("[Zetic] Colorization failed")
                 return nil
+            }
+
+            // Debug: Check image size
+            if let cgImg = result.colorImage.cgImage {
+                print("[Zetic] ✓ Image created: \(cgImg.width)×\(cgImg.height), orientation: \(result.colorImage.imageOrientation.rawValue)")
+            } else {
+                print("[Zetic] ✗ WARNING: colorImage has no CGImage!")
             }
 
             print("[Zetic] Success - center: \(result.centerDistance?.description ?? "nil")m, " +

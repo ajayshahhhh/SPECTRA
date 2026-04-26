@@ -33,7 +33,9 @@
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'id=00008140-0016702921E0801C' build)",
       "Bash(awk '/private static func zeticInfer/,/^    \\\\}$/ {print NR\": \"$0}' /Users/benjaminjiang/repos/SPECTRA/SPECTRALive/SPECTRALive/SPECTRANetProcessor.swift)",
       "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -sdk iphonesimulator -arch arm64 build)",
-      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -sdk iphoneos -configuration Debug clean build CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO)"
+      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -sdk iphoneos -configuration Debug clean build CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO)",
+      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'generic/platform=iOS' clean)",
+      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'generic/platform=iOS' build)"
     ]
   }
 }

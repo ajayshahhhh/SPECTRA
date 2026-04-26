@@ -145,9 +145,13 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
                         heatmap: result.colorImage,
                         capturedImage: frame.capturedImage
                     )
+                    print("[DemoView] Blending result: \(blended != nil ? "✓ success" : "✗ failed, using raw heatmap")")
                     let source = blended ?? result.colorImage
                     if let cg = source.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)
+                        print("[DemoView] Final image: \(cg.width)×\(cg.height)")
+                    } else {
+                        print("[DemoView] ✗ WARNING: source has no CGImage!")
                     }
                     centerDist = trackingNormal ? result.centerDistance : nil
                     minD = result.minDepth
