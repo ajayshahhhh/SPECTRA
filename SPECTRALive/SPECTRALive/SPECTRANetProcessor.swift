@@ -4,8 +4,8 @@ import UIKit
 
 enum SPECTRANetProcessor {
 
-    static let modelH: Int = 768
-    static let modelW: Int = 1024
+    static let modelH: Int = 256
+    static let modelW: Int = 320
 
     // ← Set this to your GX10's local IP address before building
     static let serverURL = URL(string: "http://10.30.131.25:8000/infer")!
@@ -17,11 +17,16 @@ enum SPECTRANetProcessor {
     nonisolated static func process(frame: ARFrame) async -> DepthResult? {
         guard let sceneDepth = frame.sceneDepth else { return nil }
 
+        // Extract async properties first
+        let capturedImage = frame.capturedImage
+        let depthMap = sceneDepth.depthMap
+        let confidenceMap = sceneDepth.confidenceMap
+
         guard
-            let jpegData = makeRGBJPEG(from: frame.capturedImage, H: modelH, W: modelW),
+            let jpegData = makeRGBJPEG(from: capturedImage, H: modelH, W: modelW),
             let (depthBytes, confBytes, lH, lW) = extractDepthConf(
-                depthMap: sceneDepth.depthMap,
-                confidenceMap: sceneDepth.confidenceMap)
+                depthMap: depthMap,
+                confidenceMap: confidenceMap)
         else { return nil }
 
         return await postInfer(jpeg: jpegData, depthBytes: depthBytes,
