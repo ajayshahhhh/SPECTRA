@@ -37,10 +37,11 @@ body {
   font-family: 'DM Sans', sans-serif;
   cursor: none;
 }
+*, *::before, *::after { cursor: none !important; }
 
 /* Cursor */
-.cur { position:fixed; width:8px; height:8px; background:var(--amber); border-radius:50%; pointer-events:none; z-index:9999; transform:translate(-50%,-50%); }
-.cr  { position:fixed; width:32px; height:32px; border:1px solid rgba(212,168,67,.3); border-radius:50%; pointer-events:none; z-index:9998; transform:translate(-50%,-50%); transition:left .1s ease-out, top .1s ease-out; }
+.cur { position:fixed; width:8px; height:8px; background:var(--amber); border-radius:50%; pointer-events:none; z-index:99999; transform:translate(-50%,-50%); }
+.cr  { position:fixed; width:32px; height:32px; border:1px solid rgba(212,168,67,.3); border-radius:50%; pointer-events:none; z-index:99998; transform:translate(-50%,-50%); transition:left .1s ease-out, top .1s ease-out; }
 
 /* Left nav */
 #vn { position:fixed; left:28px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:13px; z-index:200; }
@@ -169,8 +170,8 @@ body {
 .ucc { border:1px solid var(--gray); border-radius:13px; padding:1.4rem 1.3rem; background:var(--g2); cursor:pointer; transition:all .25s; }
 .ucc:hover { border-color:var(--adim); background:var(--ag); transform:translateY(-2px); }
 .uci { font-size:1.5rem; margin-bottom:.7rem; display:block; }
-.uct { font-family:'Playfair Display',serif; font-size:1.05rem; color:var(--cream); margin-bottom:.5rem; }
-.ucb { font-size:.78rem; color:var(--cdim); line-height:1.65; font-weight:300; }
+.uct { font-family:'Playfair Display',serif; font-size:1.15rem; color:var(--cream); margin-bottom:.6rem; }
+.ucb { font-size:.85rem; color:var(--cdim); line-height:1.65; font-weight:300; }
 .uctg { margin-top:.7rem; font-family:'DM Mono',monospace; font-size:.55rem; color:var(--adim); letter-spacing:.14em; text-transform:uppercase; }
 
 /* ── S7 MANIFESTO ── */
@@ -190,10 +191,110 @@ body {
 .tn { font-family:'Playfair Display',serif; font-size:1.05rem; color:var(--cream); margin-bottom:.3rem; }
 .tt { font-family:'DM Mono',monospace; font-size:.6rem; color:var(--cdim); letter-spacing:.13em; text-transform:uppercase; }
 .refs { width:100%; max-width:56rem; border:1px solid var(--gray); border-radius:13px; padding:1.3rem 1.8rem; background:var(--g2); }
+/* Expand panel */
+.expand-btn { margin-top:.6rem; font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.15em; text-transform:uppercase; background:none; border:1px solid var(--adim); color:var(--amber); padding:.4rem 1rem; border-radius:6px; cursor:pointer; transition:all .2s; }
+.expand-btn:hover { background:var(--ag); border-color:var(--amber); }
+.arch-expanded { display:none; width:100%; max-width:60rem; border:1px solid var(--gray); border-radius:12px; background:var(--g2); padding:1.2rem 1.6rem; margin-top:.4rem; }
+.arch-expanded.open { display:block; }
+.arch-exp-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.6rem; }
+.aexp-col { display:flex; flex-direction:column; gap:.4rem; align-items:center; }
+.aexp-title { font-family:'DM Mono',monospace; font-size:.55rem; letter-spacing:.12em; text-transform:uppercase; color:var(--cdim); text-align:center; margin-bottom:.2rem; }
+.aexp-box { border:1px solid var(--gray); border-radius:7px; padding:.5rem .6rem; font-family:'DM Mono',monospace; font-size:.55rem; background:var(--bg); text-align:center; width:100%; }
+.aexp-box .av { color:var(--cream); display:block; font-size:.6rem; }
+.aexp-box .ad { color:var(--cdim); display:block; font-size:.5rem; margin-top:.15rem; }
+.aexp-arr { font-size:.7rem; color:var(--adim); text-align:center; }
+/* Baseline table */
+.btable { width:100%; max-width:38rem; border-collapse:collapse; font-family:'DM Mono',monospace; font-size:.65rem; }
+.btable th { color:var(--amber); font-weight:500; padding:.5rem .7rem; border-bottom:1px solid var(--gray); text-align:center; letter-spacing:.1em; }
+.btable td { color:var(--cdim); padding:.45rem .7rem; border-bottom:1px solid var(--gray); text-align:center; }
+.btable tr.ours td { color:var(--amber); font-weight:500; }
+.btable tr.ours td:first-child { color:var(--cream); }
+.btable td:first-child { text-align:left; color:var(--cream-dim); }
+.btable tr:last-child td { border-bottom:none; }
+/* Hardware slide */
+#sh { gap:4vw; }
+.hw-left { flex:1; max-width:420px; }
+.hw-right { flex:1; display:flex; flex-direction:column; gap:1rem; }
+.hw-card { border:1px solid var(--gray); border-radius:13px; padding:1.4rem 1.6rem; background:var(--g2); position:relative; overflow:hidden; }
+.hw-card::before { content:''; position:absolute; top:0;left:0;right:0; height:2px; }
+.hw-card.train::before { background:var(--blue); }
+.hw-card.deploy::before { background:var(--amber); }
+.hw-badge { font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.18em; text-transform:uppercase; margin-bottom:.6rem; }
+.hw-card.train .hw-badge { color:var(--blue); }
+.hw-card.deploy .hw-badge { color:var(--amber); }
+.hw-title { font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--cream); margin-bottom:.4rem; }
+.hw-desc { font-size:.82rem; color:var(--cdim); font-weight:300; line-height:1.7; }
+.hw-specs { display:flex; gap:1rem; margin-top:.8rem; flex-wrap:wrap; }
+.hw-spec { font-family:'DM Mono',monospace; font-size:.6rem; color:var(--cdim); background:var(--bg); border:1px solid var(--gray); border-radius:5px; padding:.25rem .6rem; }
+/* Photo avatars */
+.tav-photo { width:3.2rem; height:3.2rem; border-radius:50%; border:1px solid var(--adim); margin:0 auto .8rem; overflow:hidden; background:var(--ag); display:flex; align-items:center; justify-content:center; }
+.tav-photo img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.tav-photo .ph { font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--amber); }
 .rtl { font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.2em; text-transform:uppercase; color:var(--amber); margin-bottom:.8rem; }
 .ri { font-size:.72rem; color:var(--cdim); line-height:1.6; font-weight:300; padding:.3rem 0; border-bottom:1px solid var(--gray); }
 .ri:last-child { border-bottom:none; }
 .rn { font-family:'DM Mono',monospace; font-size:.6rem; color:var(--adim); margin-right:.5rem; }
+
+/* Architecture modal */
+.arch-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+.arch-modal-overlay.open { display:flex; }
+.arch-modal { background:var(--g2); border:1px solid var(--gray); border-radius:16px; padding:2rem 2.4rem; max-width:62rem; width:92vw; max-height:88vh; overflow-y:auto; position:relative; }
+.arch-modal-close { position:absolute; top:1rem; right:1.2rem; background:none; border:1px solid var(--gray); color:var(--cdim); font-family:'DM Mono',monospace; font-size:.65rem; letter-spacing:.12em; padding:.3rem .8rem; border-radius:5px; cursor:pointer; transition:all .2s; }
+.arch-modal-close:hover { border-color:var(--amber); color:var(--amber); }
+.arch-modal-title { font-family:'DM Mono',monospace; font-size:.65rem; color:var(--amber); letter-spacing:.2em; text-transform:uppercase; margin-bottom:1.2rem; }
+
+/* Solution slide expand-in-place */
+.sol-block { transition: opacity .4s ease, transform .4s ease; }
+.sol-block.dimmed { opacity:.22; pointer-events:none; }
+.sol-block.pushed-up { transform: translateY(-1.2rem); }
+.sol-block.pushed-down { transform: translateY(1.2rem); }
+.sol-net-collapsed { cursor:pointer; }
+.sol-expanded {
+  display: none;
+  gap: 1.2rem;
+  align-items: flex-start;
+  border:1px solid var(--adim);
+  border-radius:12px;
+  background:var(--ag);
+  padding:1.2rem;
+  animation: fadeInExp .35s ease;
+}
+.sol-expanded.open { display:flex; }
+@keyframes fadeInExp { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+.sol-exp-info { flex:1; min-width:0; }
+.sol-exp-arch { flex:1.1; min-width:0; }
+.sol-arch-vert { display:flex; flex-direction:column; gap:.5rem; align-items:stretch; }
+.sav-row { display:flex; gap:.6rem; }
+.sav-row .ab, .sav-row .ae, .sav-row .adec, .sav-row .aout { flex:1; min-width:0; font-size:.65rem; padding:.75rem .9rem; }
+.sav-row .ab .av, .sav-row .ae .av, .sav-row .adec .av, .sav-row .aout .av { font-size:.75rem; }
+.sav-row .ab .ad, .sav-row .ae .ad, .sav-row .adec .ad, .sav-row .aout .ad { font-size:.58rem; }
+.sav-arr { text-align:center; color:var(--adim); font-size:1rem; line-height:1; }
+
+/* Solution slide expand animation */
+#s2 { position: relative; overflow: hidden; }
+#s2-collapsed {
+  transition: opacity .38s ease;
+  opacity: 1;
+  pointer-events: all;
+  width: 100%;
+}
+#s2-collapsed.hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+#s2-expanded {
+  position: absolute;
+  inset: 5vh 5vw;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .38s ease;
+  display: flex !important;
+  align-items: stretch;
+}
+#s2-expanded.showing {
+  opacity: 1;
+  pointer-events: all;
+}
 </style>
 </head>
 <body>
@@ -248,84 +349,105 @@ body {
 </section>
 
 <!-- ── S2 SOLUTION ── -->
-<section class="slide" id="s2" data-label="Solution">
-  <div class="col-l">
-    <div class="tag">Our Solution</div>
-    <div class="h1">Dense indoor depth.<br>From sparse consumer LiDAR.</div>
-    <div class="bt">
-      <span class="s">SPECTRA</span>Net fuses the iPhone's sparse LiDAR with its RGB camera — producing a dense, edge-accurate, metric depth map at full camera resolution.<br><br>
-      Trained on ARKitScenes with Faro laser scanner ground truth.<span class="ci"> [4]</span> Scoped to <strong style="color:var(--cream)">0.5–10m indoors</strong>. Runs entirely on-device via CoreML at ~2MB.
+<section class="slide" id="s2" data-label="Solution" style="align-items:stretch;padding:5vh 5vw;">
+
+  <!-- COLLAPSED STATE: normal two-col layout -->
+  <div id="s2-collapsed" style="display:flex;gap:5vw;width:100%;height:100%;align-items:center;">
+    <div style="flex:1;min-width:0;">
+      <div class="tag">Our Solution</div>
+      <div class="h1">Dense indoor depth.<br>From sparse consumer LiDAR.</div>
+      <div class="bt">
+        <span class="s">SPECTRA</span>Net fuses the iPhone's sparse LiDAR with its RGB camera — producing a dense, edge-accurate, metric depth map at full camera resolution.<br><br>
+        Trained on ARKitScenes with Faro laser scanner ground truth.<span class="ci"> [4]</span> Scoped to <strong style="color:var(--cream)">0.5–10m indoors</strong>. Runs entirely on-device via CoreML at ~2MB.
+      </div>
     </div>
-  </div>
-  <div class="col-r">
-    <div class="fstack">
-      <div style="display:flex;gap:.9rem;align-items:center">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:.9rem;">
+      <div style="display:flex;gap:.9rem;align-items:center;">
         <div class="fb" style="flex:1"><strong>Sparse LiDAR</strong>192×256 · metric · noisy</div>
         <span style="color:var(--adim);font-size:1.3rem">+</span>
         <div class="fb" style="flex:1"><strong>RGB Camera</strong>Full-res · sharp edges</div>
       </div>
       <div class="farr">↓</div>
-      <div class="fb hi"><strong><span class="s">SPECTRA</span>Net</strong>MobileNetV2 RGB encoder + depth CNN + FuseUpBlock decoder at 5 scales + residual correction</div>
+      <div class="fb hi" id="sol-net-btn" onclick="toggleSolExpand()" style="position:relative;">
+        <strong><span class="s">SPECTRA</span>Net</strong>
+        MobileNetV2 RGB encoder + depth CNN + FuseUpBlock decoder at 5 scales + residual correction
+        <br><span style="font-family:DM Mono,monospace;font-size:.6rem;color:var(--bg);background:var(--amber);letter-spacing:.1em;padding:.3rem .8rem;border-radius:5px;display:inline-block;margin-top:.5rem;font-weight:500">⊕ Expand Architecture</span>
+      </div>
       <div class="farr">↓</div>
       <div class="fb hi"><strong>Dense metric depth</strong>768×1024 px · float32 · meters · CoreML · ~2MB</div>
       <div class="sn"><strong>Scope:</strong> Indoor, 0.5–10m. Not designed for outdoor or long-range use.</div>
     </div>
   </div>
-</section>
 
-<!-- ── S3 ARCHITECTURE ── -->
-<section class="slide" id="s3" data-label="Architecture">
-  <div class="tag" style="text-align:center"><span class="s">SPECTRA</span>Net Architecture &nbsp;·&nbsp; <span style="opacity:.45">click any block</span></div>
-  <div class="h1" style="font-size:clamp(1.4rem,2.2vw,2.2rem);margin-bottom:0;text-align:center">RGB-guided depth upsampling — two encoders, one decoder</div>
-  <div class="ag" id="ag">
-    <div class="agrp">
-      <div class="ab" data-k="ri" onclick="ac(this)"><span class="alb">Input 1</span><span class="av">RGB Image</span><span class="ad">3 × 768 × 1024</span></div>
-      <div class="ab" data-k="li" onclick="ac(this)"><span class="alb">Input 2</span><span class="av">LiDAR Depth</span><span class="ad">192 × 256 sparse</span></div>
-      <div class="ab" data-k="ci" onclick="ac(this)"><span class="alb">Input 3</span><span class="av">Confidence</span><span class="ad">{0, 1, 2} per pixel</span></div>
-    </div>
-    <div class="aar"></div>
-    <div class="agrp">
-      <div class="ae rgb" data-k="re" onclick="ac(this)">
-        <span class="alb" style="color:var(--blue)">RGB Encoder</span>
-        <span class="av">MobileNetV2</span>
-        <span class="ad">4 scales · strides 2/4/8/16</span>
+  <!-- EXPANDED STATE: three-col layout — replaces entire slide content -->
+  <div id="s2-expanded" style="gap:3vw;">
+    <!-- LEFT: info panel -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;padding:1.2rem 0;overflow:hidden;">
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+        <div id="sol-exp-label" style="font-family:DM Mono,monospace;font-size:.6rem;color:var(--amber);letter-spacing:.22em;text-transform:uppercase;margin-bottom:.8rem;">SPECTRANet</div>
+        <div id="sol-exp-info" style="font-size:.95rem;line-height:1.75;color:var(--cdim);font-weight:300;">
+          Click any block in the diagram to learn how that stage works.
+        </div>
       </div>
-      <div style="height:.5rem"></div>
-      <div class="ae dep" data-k="de" onclick="ac(this)">
-        <span class="alb" style="color:var(--green)">Depth Encoder</span>
-        <span class="av">Lightweight CNN</span>
-        <span class="ad">5 scales · depth + conf</span>
+      <button onclick="toggleSolExpand()" style="flex-shrink:0;font-family:DM Mono,monospace;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;background:var(--amber);color:var(--bg);border:none;padding:.55rem 1.3rem;border-radius:6px;align-self:flex-start;font-weight:700;">⊖ Collapse</button>
+    </div>
+    <!-- RIGHT: architecture diagram, fills remaining space -->
+    <div style="flex:2;min-width:0;border:1px solid var(--adim);border-radius:14px;background:var(--ag);padding:1.4rem;display:flex;flex-direction:column;justify-content:space-between;gap:.7rem;">
+      <div class="sav-row">
+        <div class="ab" data-k="ri" onclick="solAc(this)"><span class="alb">Input 1</span><span class="av">RGB Image</span><span class="ad">3×768×1024</span></div>
+        <div class="ab" data-k="li" onclick="solAc(this)"><span class="alb">Input 2</span><span class="av">LiDAR Depth</span><span class="ad">192×256 sparse</span></div>
+        <div class="ab" data-k="ci" onclick="solAc(this)"><span class="alb">Input 3</span><span class="av">Confidence</span><span class="ad">{0,1,2}/pixel</span></div>
       </div>
-    </div>
-    <div class="aar"></div>
-    <div class="adec" data-k="dc" onclick="ac(this)">
-      <span class="alb" style="color:var(--purple)">Fusion Decoder</span>
-      <span class="av">FuseUpBlocks</span>
-      <span class="ad">bot → up3 → up2 → up1 → up0</span>
-    </div>
-    <div class="aar"></div>
-    <div class="ab" data-k="rh" onclick="ac(this)"><span class="alb">Residual Head</span><span class="av">Δ correction</span><span class="ad">scale 0.2×</span></div>
-    <div class="aar" style="background:var(--adim)"></div>
-    <div class="aout" data-k="out" onclick="ac(this)">
-      <span class="alb">Output</span>
-      <span class="av">Dense Depth</span>
-      <span class="ad">768 × 1024 · meters</span>
+      <div class="sav-arr">↓</div>
+      <div class="sav-row">
+        <div class="ae rgb" data-k="re" onclick="solAc(this)"><span class="alb" style="color:var(--blue)">RGB Encoder</span><span class="av">MobileNetV2</span><span class="ad">4 scales · s2/4/8/16</span></div>
+        <div class="ae dep" data-k="de" onclick="solAc(this)"><span class="alb" style="color:var(--green)">Depth Encoder</span><span class="av">Lightweight CNN</span><span class="ad">5 scales · depth+conf</span></div>
+      </div>
+      <div class="sav-arr">↓</div>
+      <div class="sav-row">
+        <div class="adec" data-k="dc" onclick="solAc(this)"><span class="alb" style="color:var(--purple)">Fusion Decoder</span><span class="av">FuseUpBlocks</span><span class="ad">bot→up3→up2→up1→up0</span></div>
+      </div>
+      <div class="sav-arr">↓</div>
+      <div class="sav-row">
+        <div class="ab" data-k="rh" onclick="solAc(this)"><span class="alb">Residual Head</span><span class="av">Δ correction</span><span class="ad">scale 0.2×</span></div>
+        <div class="aout" data-k="out" onclick="solAc(this)"><span class="alb">Output</span><span class="av">Dense Depth</span><span class="ad">768×1024 · meters</span></div>
+      </div>
     </div>
   </div>
-  <div class="aib" id="aib"><strong>Click any block above</strong> to see how that stage works. <span class="s">SPECTRA</span>Live runs the full pipeline on iPhone via <code>CoreML</code> — ~2MB, zero cloud latency.</div>
+
 </section>
+
 
 <!-- ── S4 DEMO ── -->
 <section class="slide" id="s4" data-label="Demo">
-  <div class="lb"><div class="ld"></div>Live Demo</div>
-  <div class="dh">See <span class="s">SPECTRA</span>Live<br><em style="color:var(--amber);font-style:normal">in real time.</em></div>
-  <div class="bt" style="max-width:30rem;text-align:center">
-    iPhone 15 Pro streams RGB + sparse LiDAR into <span class="s">SPECTRA</span>Net on-device. Dense metric depth map out. No cloud, no latency.
-  </div>
-  <div class="dspecs">
-    <div class="ds"><span class="dsv">~2MB</span><span class="dsl">model size</span></div>
-    <div class="ds"><span class="dsv">4×</span><span class="dsl">resolution gain</span></div>
-    <div class="ds"><span class="dsv">0.5–10m</span><span class="dsl">indoor range</span></div>
+  <div style="display:flex;align-items:center;gap:5vw;width:100%;max-width:64rem">
+    <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:1.8rem">
+      <div class="lb"><div class="ld"></div>Live Demo</div>
+      <div class="dh" style="text-align:left">See <span class="s">SPECTRA</span>Live<br><em style="color:var(--amber);font-style:normal">in real time.</em></div>
+      <div class="bt" style="font-size:.95rem">
+        iPhone 15 Pro streams RGB + sparse LiDAR into <span class="s">SPECTRA</span>Net on-device via ZETIC Melange. Dense metric depth out. No cloud, no latency.
+      </div>
+      <div class="dspecs" style="gap:2rem">
+        <div class="ds"><span class="dsv">~2MB</span><span class="dsl">model size</span></div>
+        <div class="ds"><span class="dsv">4×</span><span class="dsl">resolution</span></div>
+        <div class="ds"><span class="dsv">NPU</span><span class="dsl">on-device</span></div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:1rem">
+      <div style="font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.2em;color:var(--amber);text-transform:uppercase;margin-bottom:.2rem">ARKitScenes Validation Benchmarks</div>
+      <table class="btable">
+        <tr><th>Method</th><th>RMSE↓</th><th>MAE↓</th><th>δ1↑</th><th>δ2↑</th><th>δ3↑</th></tr>
+        <tr><td>Bicubic baseline</td><td>0.2171</td><td>0.0730</td><td>0.9476</td><td>0.9550</td><td>0.9630</td></tr>
+        <tr><td>Marigold-DC (zero-shot)</td><td>0.0989</td><td>0.0724</td><td>0.9730</td><td>0.9973</td><td>0.9995</td></tr>
+        <tr><td>Marigold-DC (LoRA)</td><td>0.1007</td><td>0.0735</td><td>0.9714</td><td>0.9970</td><td>0.9995</td></tr>
+        <tr><td><span class="s">SPECTRA</span>Net (L1 only)</td><td>0.0709</td><td>0.0257</td><td>0.9851</td><td>0.9953</td><td>0.9984</td></tr>
+        <tr class="ours"><td><span class="s">SPECTRA</span>Net (ours)</td><td>0.0552</td><td>0.0216</td><td>0.9909</td><td>0.9973</td><td>0.9991</td></tr>
+      </table>
+      <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--cdim);line-height:1.7">
+        δ1=0.9909 → <strong style="color:var(--cream)">99.1% of pixels within ±25% of ground truth.</strong><br>
+        75% lower RMSE vs bicubic · 1.8× better than Marigold-DC on RMSE · 3.4× better MAE.
+      </div>
+    </div>
   </div>
 </section>
 
@@ -352,6 +474,45 @@ body {
   </div>
 </section>
 
+<!-- ── SH HARDWARE ── -->
+<section class="slide" id="sh" data-label="Hardware">
+  <div class="hw-left">
+    <div class="tag">Infrastructure</div>
+    <div class="h1">Built to run at full speed.<br>Deployed to run offline.</div>
+    <div class="bt">
+      <span class="s">SPECTRA</span> uses two pieces of hardware for two distinct jobs — training at maximum efficiency on the GX10, then deploying the result entirely on-device via ZETIC Melange. Once deployed, the iPhone needs nothing else.
+    </div>
+  </div>
+  <div class="hw-right">
+    <div class="hw-card train">
+      <div class="hw-badge">Training — ASUS Ascent GX10</div>
+      <div class="hw-title">1 petaFLOP · 128GB unified memory</div>
+      <div class="hw-desc">
+        <span class="s">SPECTRA</span>Net was trained on the full ARKitScenes dataset on the GX10's NVIDIA GB10 Grace Blackwell Superchip. The 128GB unified memory pool meant no gradient checkpointing hacks — full batch sizes, full resolution, full speed. Training that would have required cloud A100 time ran entirely local.
+      </div>
+      <div class="hw-specs">
+        <span class="hw-spec">NVIDIA GB10 Grace Blackwell</span>
+        <span class="hw-spec">128GB LPDDR5x</span>
+        <span class="hw-spec">Ubuntu + PyTorch</span>
+        <span class="hw-spec">ARKitScenes · full dataset</span>
+      </div>
+    </div>
+    <div class="hw-card deploy">
+      <div class="hw-badge">Deployment — ZETIC Melange + iPhone 15 Pro</div>
+      <div class="hw-title">NPU-optimized · fully offline · 3 lines of code</div>
+      <div class="hw-desc">
+        After training, the model was uploaded to ZETIC Melange — which automatically converted it to an NPU-optimized binary for Apple's Neural Engine and generated the Swift SDK. <span class="s">SPECTRA</span>Live runs the full inference pipeline on the iPhone itself. No GX10, no internet, no cloud. Private by default.
+      </div>
+      <div class="hw-specs">
+        <span class="hw-spec">Apple Neural Engine (A17 Pro)</span>
+        <span class="hw-spec">ZETIC Melange SDK</span>
+        <span class="hw-spec">~2MB on-device</span>
+        <span class="hw-spec">zero cloud dependency</span>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── S6 USE CASES ── -->
 <section class="slide" id="s6" data-label="Use Cases">
   <div style="text-align:center;width:100%;max-width:58rem">
@@ -363,8 +524,8 @@ body {
     <div class="ucc"><span class="uci">🥽</span><div class="uct">AR Occlusion</div><div class="ucb">Per-pixel metric depth anchors virtual objects to real surfaces. Correct occlusion needs <span class="s">SPECTRA</span>'s precision.</div><div class="uctg">ARKit · RealityKit</div></div>
     <div class="ucc"><span class="uci">♿</span><div class="uct">Accessibility</div><div class="ucb">Real-time metric warnings — "obstacle 0.8m ahead" — from your phone, powered by <span class="s">SPECTRA</span>Live.</div><div class="uctg">Navigation · Assistive</div></div>
     <div class="ucc"><span class="uci">✊</span><div class="uct">Robot Grasping</div><div class="ucb">Edge-accurate depth at object boundaries enables reliable grasp pose estimation from cheap hardware via <span class="s">SPECTRA</span>Net.</div><div class="uctg">Pick-and-place</div></div>
-    <div class="ucc"><span class="uci">📐</span><div class="uct">Indoor Scanning</div><div class="ucb">Room-scale metric reconstruction without a dedicated rig — just an iPhone running <span class="s">SPECTRA</span>Live.</div><div class="uctg">BIM · Real Estate</div></div>
-    <div class="ucc"><span class="uci">🏭</span><div class="uct">Warehouse AMRs</div><div class="ucb">Velodyne-class perception at consumer cost — <span class="s">SPECTRA</span>Net bridges the gap for logistics and sorting robots.</div><div class="uctg">Logistics · AMR</div></div>
+    <div class="ucc"><span class="uci">🏠</span><div class="uct">Smart Home Security</div><div class="ucb">Consumer cameras upgraded with <span class="s">SPECTRA</span>Live detect intruders by 3D shape rather than motion — distinguishing a pet from a person.</div><div class="uctg">Security · Presence Detection</div></div>
+    <div class="ucc"><span class="uci">🦾</span><div class="uct">Prosthetic Vision</div><div class="ucb">Embedding <span class="s">SPECTRA</span>Net in a wearable gives amputees and prosthetic arm users real-time depth feedback for grasp control without a dedicated sensor rig.</div><div class="uctg">Neuroprosthetics · Rehab</div></div>
   </div>
 </section>
 
@@ -391,10 +552,22 @@ body {
   <div class="tag" style="text-align:center">The Team</div>
   <div class="h1" style="font-size:clamp(1.6rem,3vw,3rem);text-align:center">Built in 36 hours at LA Hacks 2026</div>
   <div class="trow">
-    <div class="tc"><div class="tav">A</div><div class="tn">Ajay Shah</div><div class="tt">Stanford · CS + EE</div></div>
-    <div class="tc"><div class="tav">W</div><div class="tn">William Wang</div><div class="tt">Stanford · CS</div></div>
-    <div class="tc"><div class="tav">B</div><div class="tn">Benjamin Jiang</div><div class="tt">Stanford · CS</div></div>
-    <div class="tc"><div class="tav">J</div><div class="tn">Junfeng Lin</div><div class="tt">Stanford · CS</div></div>
+    <div class="tc">
+      <div class="tav-photo"><img id="photo-ajay" src="ajay.jpeg" alt="Ajay Shah" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="ph" style="display:none">A</span></div>
+      <div class="tn">Ajay Shah</div><div class="tt">Stanford · CS + EE</div>
+    </div>
+    <div class="tc">
+      <div class="tav-photo"><img id="photo-william" src="william.jpeg" alt="William Wang" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="ph" style="display:none">W</span></div>
+      <div class="tn">William Wang</div><div class="tt">Stanford · CS</div>
+    </div>
+    <div class="tc">
+      <div class="tav-photo"><img id="photo-benjamin" src="benjamin.png" alt="Benjamin Jiang" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="ph" style="display:none">B</span></div>
+      <div class="tn">Benjamin Jiang</div><div class="tt">Stanford · CS</div>
+    </div>
+    <div class="tc">
+      <div class="tav-photo"><img id="photo-junfeng" src="junfeng.jpeg" alt="Junfeng Lin" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="ph" style="display:none">J</span></div>
+      <div class="tn">Junfeng Lin</div><div class="tt">Stanford · CS</div>
+    </div>
   </div>
   <div class="refs">
     <div class="rtl">References</div>
@@ -434,7 +607,42 @@ function updateNav(idx){
   document.querySelectorAll('.vd').forEach((d,i)=>d.classList.toggle('on',i===idx));
   document.getElementById('sc').textContent=String(idx+1).padStart(2,'0')+' / '+String(N).padStart(2,'0');
   document.getElementById('sl').textContent='SPECTRA — '+LBLS[idx];
-  if(idx===5&&!rReady)initRoomba();
+  if(idx===4&&!rReady)initRoomba();
+}
+
+function toggleSolExpand(){
+  const collapsed = document.getElementById('s2-collapsed');
+  const expanded  = document.getElementById('s2-expanded');
+  const isOpen = expanded.classList.contains('showing');
+  if(!isOpen){
+    // Animate out collapsed, animate in expanded
+    collapsed.classList.add('hiding');
+    setTimeout(()=>{ collapsed.style.pointerEvents='none'; },400);
+    expanded.classList.add('showing');
+    document.getElementById('sol-exp-info').textContent = 'Click any block in the diagram to learn how that stage works.';
+    const lbl=document.getElementById('sol-exp-label'); if(lbl) lbl.textContent='SPECTRANet';
+    document.querySelectorAll('#s2-expanded [data-k]').forEach(e=>e.classList.remove('lit'));
+  } else {
+    // Animate back
+    expanded.classList.remove('showing');
+    collapsed.classList.remove('hiding');
+    collapsed.style.pointerEvents = '';
+  }
+}
+
+const BLOCK_NAMES={
+  ri:'RGB Image', li:'LiDAR Depth', ci:'Confidence Map',
+  re:'RGB Encoder', de:'Depth Encoder', dc:'Fusion Decoder',
+  rh:'Residual Head', out:'Output'
+};
+function solAc(el){
+  document.querySelectorAll('#s2-expanded [data-k]').forEach(e=>e.classList.remove('lit'));
+  el.classList.add('lit');
+  const info = AI[el.dataset.k] || '';
+  const infoEl = document.getElementById('sol-exp-info');
+  if(infoEl) infoEl.innerHTML = info;
+  const lbl = document.getElementById('sol-exp-label');
+  if(lbl) lbl.textContent = BLOCK_NAMES[el.dataset.k] || 'SPECTRANet';
 }
 
 const io=new IntersectionObserver(entries=>{
@@ -457,7 +665,10 @@ const AI={
 function ac(el){
   document.querySelectorAll('[data-k]').forEach(e=>e.classList.remove('lit'));
   el.classList.add('lit');
-  document.getElementById('aib').innerHTML=AI[el.dataset.k]||'';
+  const info=AI[el.dataset.k]||'';
+  document.getElementById('aib').innerHTML=info;
+  const modal=document.getElementById('aib-modal');
+  if(modal) modal.innerHTML=info||'<strong>Click any block</strong> to see how that stage works.';
 }
 
 // Roomba animation
@@ -688,5 +899,7 @@ function initRoomba(){
   loop();
 }
 </script>
+
+
 </body>
 </html>
