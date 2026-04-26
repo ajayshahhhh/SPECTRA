@@ -14,7 +14,12 @@
       "Bash(grep -E \"\\.swift$|^d\")",
       "Bash(git rm *)",
       "Bash(python3 -c ' *)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(xcodebuild -project SPECTRALive.xcodeproj -list)",
+      "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug clean build)",
+      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug clean build)",
+      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' clean build)",
+      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)"
     ]
   }
 }

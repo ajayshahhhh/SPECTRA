@@ -20,8 +20,18 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		3A18A2432F9CB14F00EF64D9 /* SPECTRALive */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3A18A2502F9CB15100EF64D9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = SPECTRALive;
 			sourceTree = "<group>";
+		};
+		3A18A2502F9CB15100EF64D9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3A18A2402F9CB14F00EF64D9 /* SPECTRALive */;
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -276,9 +286,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7D287C84CR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRALive uses the camera for live AR depth visualization.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_FILE = SPECTRALive/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -310,9 +318,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7D287C84CR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRALive uses the camera for live AR depth visualization.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_FILE = SPECTRALive/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
