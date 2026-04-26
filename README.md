@@ -74,7 +74,7 @@ python infer.py \
   --conf sample_inputs/confidence.png \
   --out output_depth.png
 ```
-##Training & Edge Deployment (ASUS Ascent GX10)
+## Training & Edge Deployment (ASUS Ascent GX10)
 
 **Training (GX10)**
 - Model trained on the ARKitScenes upsampling split  
