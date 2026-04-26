@@ -19,7 +19,12 @@
       "Bash(xcodebuild -project SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug clean build)",
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug clean build)",
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' clean build)",
-      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)"
+      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
+      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -showBuildSettings)",
+      "Bash(xcrun devicectl *)",
+      "Bash(xcrun *)",
+      "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -destination 'id=00008140-0016702921E0801C' clean build)",
+      "Bash(security find-identity *)"
     ]
   }
 }
