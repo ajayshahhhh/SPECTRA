@@ -289,36 +289,38 @@ async def ws_infer(websocket: WebSocket):
       [jpeg_bytes]
     """
     await websocket.accept()
+    print(f"[WS] client connected: {websocket.client}")
     try:
         while True:
             data = await websocket.receive_bytes()
-            lH, lW, jpeg_len = struct.unpack_from(">III", data, 0)
-            offset = 12
-            jpeg_bytes_in = data[offset: offset + jpeg_len];  offset += jpeg_len
-            # Remaining bytes: zlib-compressed depth then conf, separated by a known size
-            depth_conf = data[offset:]
-            # First zlib stream is depth, second is conf — decode until first stream ends
-            dec = zlib.decompressobj()
-            depth_raw = dec.decompress(depth_conf)
-            conf_raw  = zlib.decompress(dec.unused_data)
+            try:
+                lH, lW, jpeg_len = struct.unpack_from(">III", data, 0)
+                offset = 12
+                jpeg_bytes_in = data[offset: offset + jpeg_len];  offset += jpeg_len
+                # NSData.compressed(using: .zlib) produces raw DEFLATE (no header)
+                dec = zlib.decompressobj(wbits=-15)
+                depth_raw = dec.decompress(bytes(data[offset:]))
+                conf_raw  = zlib.decompress(dec.unused_data, wbits=-15)
 
-            if _jpeg is not None:
-                rgb_np = _jpeg.decode(bytes(jpeg_bytes_in), pixel_format=TJPF_RGB)
-                rgb_np = np.array(Image.fromarray(rgb_np).resize(
-                    (TARGET_W, TARGET_H), Image.BILINEAR))
-            else:
-                rgb_np = np.array(Image.open(io.BytesIO(bytes(jpeg_bytes_in))).convert("RGB")
-                                  .resize((TARGET_W, TARGET_H), Image.BILINEAR))
+                if _jpeg is not None:
+                    rgb_np = _jpeg.decode(bytes(jpeg_bytes_in), pixel_format=TJPF_RGB)
+                    rgb_np = np.array(Image.fromarray(rgb_np).resize(
+                        (TARGET_W, TARGET_H), Image.BILINEAR))
+                else:
+                    rgb_np = np.array(Image.open(io.BytesIO(bytes(jpeg_bytes_in))).convert("RGB")
+                                      .resize((TARGET_W, TARGET_H), Image.BILINEAR))
 
-            lo_m    = np.frombuffer(depth_raw, dtype="<f4").reshape(lH, lW).copy()
-            conf_np = np.frombuffer(conf_raw,  dtype=np.uint8).reshape(lH, lW).copy()
+                lo_m    = np.frombuffer(depth_raw, dtype="<f4").reshape(lH, lW).copy()
+                conf_np = np.frombuffer(conf_raw,  dtype=np.uint8).reshape(lH, lW).copy()
 
-            jpeg_out, center, min_d, max_d = _run_infer(rgb_np, lo_m, conf_np)
-            if jpeg_out is None:
-                continue
+                jpeg_out, center, min_d, max_d = _run_infer(rgb_np, lo_m, conf_np)
+                if jpeg_out is None:
+                    continue
 
-            header = struct.pack(">Ifff", len(jpeg_out), center, min_d, max_d)
-            await websocket.send_bytes(header + jpeg_out)
+                header = struct.pack(">Ifff", len(jpeg_out), center, min_d, max_d)
+                await websocket.send_bytes(header + jpeg_out)
+            except Exception as e:
+                print(f"[WARN] frame error (skipping): {e}")
 
     except WebSocketDisconnect:
         pass

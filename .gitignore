@@ -1,4 +1,12 @@
-SPECTRALive/.DS_Store
-SPECTRALive/SPECTRALive.xcodeproj/project.xcworkspace/xcuserdata/ajayshah.xcuserdatad/UserInterfaceState.xcuserstate
-SPECTRALive/SPECTRALive.xcodeproj/project.xcworkspace/xcuserdata/ajayshah.xcuserdatad/UserInterfaceState.xcuserstate
-SPECTRALive/SPECTRALive.xcodeproj/project.xcworkspace/xcuserdata/ajayshah.xcuserdatad/UserInterfaceState.xcuserstate
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
