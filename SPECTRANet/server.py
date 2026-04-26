@@ -17,13 +17,15 @@ Response: 200 OK, image/jpeg — colorized depth map (landscape).
 from __future__ import annotations
 
 import io
+import struct
 import time
+import zlib
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, Form, UploadFile
+from fastapi import FastAPI, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from PIL import Image
 from torchvision import transforms as T
@@ -240,3 +242,84 @@ async def infer(
             "X-Max-Depth":       f"{max_d:.4f}",
         },
     )
+
+
+def _run_infer(rgb_np, lo_m, conf_np):
+    """Shared inference logic for both HTTP and WebSocket endpoints."""
+    H, W = TARGET_H, TARGET_W
+
+    rgb_t = torch.from_numpy(rgb_np).permute(2, 0, 1).float() / 255.0
+    rgb_t = T.Normalize(IMAGENET_MEAN, IMAGENET_STD)(rgb_t).unsqueeze(0).to(_device)
+
+    lo_filtered = np.where(conf_np >= 2, lo_m, 0.0).astype(np.float32)
+    lo_t   = torch.from_numpy(lo_filtered).unsqueeze(0).unsqueeze(0).to(_device)
+    conf_t = torch.from_numpy(conf_np.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(_device)
+
+    bicubic      = F.interpolate(lo_t, (H, W), mode="bicubic", align_corners=False).clamp(0, DEPTH_MAX)
+    bicubic_norm = (bicubic / DEPTH_MAX).clamp(0, 1)
+    conf_hi      = F.interpolate((conf_t == 2).float(), (H, W), mode="bilinear", align_corners=False)
+
+    if _graph is not None:
+        _static_rgb.copy_(rgb_t)
+        _static_bicubic.copy_(bicubic_norm)
+        _static_conf_hi.copy_(conf_hi)
+        _graph.replay()
+        pred_m = (_static_out * DEPTH_MAX).clamp(DEPTH_MIN, DEPTH_MAX)
+    else:
+        with torch.no_grad():
+            pred_norm = _model(rgb_t, bicubic_norm, conf_hi)
+            pred_m    = (pred_norm * DEPTH_MAX).clamp(DEPTH_MIN, DEPTH_MAX)
+
+    if _LUT_GPU is not None:
+        return _colorize_gpu(pred_m.squeeze())
+    return _colorize_cpu(pred_m.squeeze().cpu().numpy().astype(np.float32))
+
+
+@app.websocket("/ws")
+async def ws_infer(websocket: WebSocket):
+    """WebSocket endpoint — persistent connection, one frame per message.
+
+    Client sends binary:
+      [4B uint32 lH][4B uint32 lW][4B uint32 jpeg_len]
+      [jpeg_bytes][zlib_depth_bytes][zlib_conf_bytes]
+
+    Server replies binary:
+      [4B uint32 jpeg_len][4B float32 center][4B float32 min_d][4B float32 max_d]
+      [jpeg_bytes]
+    """
+    await websocket.accept()
+    print(f"[WS] client connected: {websocket.client}")
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            try:
+                lH, lW, jpeg_len = struct.unpack_from(">III", data, 0)
+                offset = 12
+                jpeg_bytes_in = data[offset: offset + jpeg_len];  offset += jpeg_len
+                # NSData.compressed(using: .zlib) produces raw DEFLATE (no header)
+                dec = zlib.decompressobj(wbits=-15)
+                depth_raw = dec.decompress(bytes(data[offset:]))
+                conf_raw  = zlib.decompress(dec.unused_data, wbits=-15)
+
+                if _jpeg is not None:
+                    rgb_np = _jpeg.decode(bytes(jpeg_bytes_in), pixel_format=TJPF_RGB)
+                    rgb_np = np.array(Image.fromarray(rgb_np).resize(
+                        (TARGET_W, TARGET_H), Image.BILINEAR))
+                else:
+                    rgb_np = np.array(Image.open(io.BytesIO(bytes(jpeg_bytes_in))).convert("RGB")
+                                      .resize((TARGET_W, TARGET_H), Image.BILINEAR))
+
+                lo_m    = np.frombuffer(depth_raw, dtype="<f4").reshape(lH, lW).copy()
+                conf_np = np.frombuffer(conf_raw,  dtype=np.uint8).reshape(lH, lW).copy()
+
+                jpeg_out, center, min_d, max_d = _run_infer(rgb_np, lo_m, conf_np)
+                if jpeg_out is None:
+                    continue
+
+                header = struct.pack(">Ifff", len(jpeg_out), center, min_d, max_d)
+                await websocket.send_bytes(header + jpeg_out)
+            except Exception as e:
+                print(f"[WARN] frame error (skipping): {e}")
+
+    except WebSocketDisconnect:
+        pass
