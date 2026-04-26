@@ -74,14 +74,14 @@ python infer.py \
   --conf sample_inputs/confidence.png \
   --out output_depth.png
 ```
-**Training & Edge Deployment (ASUS Ascent GX10)**
+##Training & Edge Deployment (ASUS Ascent GX10)##
 
-### Training (GX10)
+**Training (GX10)**
 - Model trained on the ARKitScenes upsampling split  
 - Demonstrates feasibility of training lightweight depth models on edge GPU hardware  
 - Same architecture used for all downstream deployments (no retraining required)  
 
-### Deployment (GX10)
+**Deployment (GX10)**
 - Runs using the PyTorch inference pipeline  
 - Processes RGB + sparse LiDAR depth inputs to produce dense metric depth  
 - Suitable for real-time or near–real-time edge inference  
