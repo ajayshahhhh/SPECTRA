@@ -36,7 +36,7 @@ enum SPECTRANetProcessor {
         let sy = CGFloat(H) / ci.extent.height
         let scaled = ci.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
         guard let cgImg = ciContext.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.4)
+        return UIImage(cgImage: cgImg).jpegData(compressionQuality: 0.85)
     }
 
     // MARK: - Extract raw bytes from ARKit depth/confidence buffers
