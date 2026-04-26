@@ -9,6 +9,7 @@ enum AppDestination: Hashable {
 struct HomeView: View {
     @State private var path = NavigationPath()
     @State private var pulseScale: CGFloat = 1.0
+    @AppStorage("useZetic") private var useZetic = true
 
     // Color palette matching the HTML design
     let bgDark = Color(hex: "0d0c0a")
@@ -58,6 +59,31 @@ struct HomeView: View {
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
                             .foregroundStyle(amber)
                             .tracking(0.2 * 9)
+
+                        // Backend toggle
+                        #if !targetEnvironment(simulator)
+                        HStack(spacing: 8) {
+                            Text("Backend:")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(creamDim)
+
+                            Button {
+                                useZetic.toggle()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: useZetic ? "brain" : "network")
+                                        .font(.system(size: 10, weight: .semibold))
+                                    Text(useZetic ? "Zetic" : "GX10")
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(useZetic ? Color.green : Color.orange, in: Capsule())
+                            }
+                        }
+                        .padding(.top, 4)
+                        #endif
                     }
                     .padding(.bottom, 38)
 

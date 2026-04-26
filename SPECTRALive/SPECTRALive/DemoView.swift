@@ -19,6 +19,21 @@ final class DemoSessionModel: ObservableObject {
     @Published var lastInferenceMs: Int?
     @Published var depthMode: DemoDepthMode = .liveDepth
     nonisolated(unsafe) var latestFrame: ARFrame?
+
+    // Backend selection now comes from AppStorage
+    var spectraNetBackend: SPECTRANetBackend {
+        let useZetic: Bool
+        if UserDefaults.standard.object(forKey: "useZetic") == nil {
+            useZetic = true  // Default to Zetic
+        } else {
+            useZetic = UserDefaults.standard.bool(forKey: "useZetic")
+        }
+        #if !targetEnvironment(simulator)
+        return useZetic ? .zeticMLange : .gx10Server
+        #else
+        return .gx10Server
+        #endif
+    }
 }
 
 // MARK: - AR container (drives camera display + depth processing)
@@ -49,6 +64,7 @@ struct DemoARViewContainer: UIViewRepresentable {
             context.coordinator.depthMode = depthMode
             context.coordinator.resetProcessing()
         }
+        // Backend is now read dynamically from UserDefaults in the session method
     }
 }
 
@@ -60,6 +76,21 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
     nonisolated(unsafe) private var lastMode: DemoDepthMode = .liveDepth
 
     init(model: DemoSessionModel) { self.model = model }
+
+    // Read backend from UserDefaults
+    nonisolated private var spectraNetBackend: SPECTRANetBackend {
+        let useZetic: Bool
+        if UserDefaults.standard.object(forKey: "useZetic") == nil {
+            useZetic = true  // Default to Zetic
+        } else {
+            useZetic = UserDefaults.standard.bool(forKey: "useZetic")
+        }
+        #if !targetEnvironment(simulator)
+        return useZetic ? .zeticMLange : .gx10Server
+        #else
+        return .gx10Server
+        #endif
+    }
 
     nonisolated func resetProcessing() {
         lastProcessTime = 0
@@ -108,7 +139,8 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
                     maxD = result.maxDepth
                 }
             case .spectraNet:
-                if let result = await SPECTRANetProcessor.process(frame: frame) {
+                let backend = coordinator.spectraNetBackend
+                if let result = await SPECTRANetProcessor.process(frame: frame, backend: backend) {
                     let blended = DepthProcessor.blendHeatmapWithCamera(
                         heatmap: result.colorImage,
                         capturedImage: frame.capturedImage
