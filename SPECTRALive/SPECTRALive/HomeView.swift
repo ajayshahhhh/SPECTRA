@@ -105,7 +105,7 @@ struct HomeView: View {
 
                     // Mode cards - Live Depth and SPECTRANet in one row
                     VStack(spacing: 16) {
-                        HStack(spacing: 16) {
+                        HStack(alignment: .top, spacing: 16) {
                             modeCard(
                                 label: "Live Depth",
                                 description: "Raw LiDAR heatmap",
