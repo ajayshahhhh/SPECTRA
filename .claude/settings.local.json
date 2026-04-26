@@ -1,11 +1,18 @@
 {
   "permissions": {
     "allow": [
+      "Bash(git merge *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug build)",
       "Bash(xcodebuild -project SPECTRALive/SPECTRALive.xcodeproj -scheme SPECTRALive -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
       "Bash(git branch *)",
       "Bash(git restore *)",
-      "Bash(grep -E \"\\\\.swift$|^d\")"
+      "Bash(grep -E \"\\.swift$|^d\")",
+      "Bash(git rm *)"
     ]
   }
 }

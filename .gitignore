@@ -1,5 +1,15 @@
 SPECTRALive/.DS_Store
 
+# macOS
+.DS_Store
+
 # Xcode user-specific files
 *.xcuserstate
 **/xcuserdata/
+xcuserdata/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
