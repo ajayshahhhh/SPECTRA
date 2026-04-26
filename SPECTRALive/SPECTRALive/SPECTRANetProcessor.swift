@@ -32,6 +32,10 @@ enum SPECTRANetProcessor {
     static let DEPTH_MAX: Float = 10.0
     static let DEPTH_MIN: Float = 0.5
 
+    // Zetic calibration: empirically tuned to match Asus/server depth at >1m
+    // Based on measurement: Zetic 2.7m vs actual 3.2m → scale factor = 3.2/2.7 ≈ 1.19
+    static let ZETIC_DEPTH_SCALE: Float = 1  // Increase by 19% to correct underestimation
+
     // ← Set this to your GX10's local IP address before building
     static let serverURL = URL(string: "http://10.30.131.25:8000/infer")!
 
@@ -207,7 +211,7 @@ enum SPECTRANetProcessor {
     nonisolated private static func upsampleDepthConf(
         depthBytes: Data, confBytes: Data, srcH: Int, srcW: Int, dstH: Int, dstW: Int
     ) -> (depthData: Data, confData: Data)? {
-        // Simple bilinear upsampling
+        // Bicubic upsampling (matching server.py bicubic interpolation)
         var srcDepth = depthBytes.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
         let srcConf = confBytes.withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
 
@@ -226,33 +230,49 @@ enum SPECTRANetProcessor {
         let scaleY = Float(srcH) / Float(dstH)
         let scaleX = Float(srcW) / Float(dstW)
 
+        // Bicubic interpolation (matching PyTorch's bicubic mode)
         for dy in 0..<dstH {
             for dx in 0..<dstW {
                 let sy = Float(dy) * scaleY
                 let sx = Float(dx) * scaleX
 
-                let sy0 = Int(sy)
-                let sx0 = Int(sx)
-                let sy1 = min(sy0 + 1, srcH - 1)
-                let sx1 = min(sx0 + 1, srcW - 1)
+                // Get 4×4 neighborhood for bicubic
+                let sy1 = Int(sy)
+                let sx1 = Int(sx)
 
-                let fy = sy - Float(sy0)
-                let fx = sx - Float(sx0)
+                var depth: Float = 0.0
+                var totalWeight: Float = 0.0
 
-                // Bilinear interpolation for depth
-                let d00 = srcDepth[sy0 * srcW + sx0]
-                let d01 = srcDepth[sy0 * srcW + sx1]
-                let d10 = srcDepth[sy1 * srcW + sx0]
-                let d11 = srcDepth[sy1 * srcW + sx1]
+                // Bicubic kernel (Catmull-Rom)
+                for j in -1...2 {
+                    for i in -1...2 {
+                        let srcY = max(0, min(srcH - 1, sy1 + j))
+                        let srcX = max(0, min(srcW - 1, sx1 + i))
 
-                let d0 = d00 * (1 - fx) + d01 * fx
-                let d1 = d10 * (1 - fx) + d11 * fx
-                let depth = d0 * (1 - fy) + d1 * fy
+                        let dy = sy - Float(sy1 + j)
+                        let dx = sx - Float(sx1 + i)
+
+                        // Catmull-Rom weights
+                        let wy = cubicWeight(dy)
+                        let wx = cubicWeight(dx)
+                        let weight = wy * wx
+
+                        depth += srcDepth[srcY * srcW + srcX] * weight
+                        totalWeight += weight
+                    }
+                }
+
+                if totalWeight > 0 {
+                    depth /= totalWeight
+                }
+
                 // Normalize depth: (depth / DEPTH_MAX).clamp(0, 1)
                 dstDepth[dy * dstW + dx] = min(max(depth / DEPTH_MAX, 0.0), 1.0)
 
-                // Binary confidence mask: 1.0 if confidence >= 2, else 0.0
-                let srcIdx = sy0 * srcW + sx0
+                // Binary confidence mask: 1.0 if confidence >= 2, else 0.0 (bilinear for confidence)
+                let sy0 = Int(sy)
+                let sx0 = Int(sx)
+                let srcIdx = max(0, min(srcH - 1, sy0)) * srcW + max(0, min(srcW - 1, sx0))
                 dstConf[dy * dstW + dx] = srcConf[srcIdx] >= 2 ? 1.0 : 0.0
             }
         }
@@ -260,6 +280,17 @@ enum SPECTRANetProcessor {
         let depthData = dstDepth.withUnsafeBytes { Data($0) }
         let confData = dstConf.withUnsafeBytes { Data($0) }
         return (depthData, confData)
+    }
+
+    // Catmull-Rom cubic interpolation weight (matching PyTorch bicubic)
+    nonisolated private static func cubicWeight(_ x: Float) -> Float {
+        let absX = abs(x)
+        if absX <= 1.0 {
+            return 1.5 * absX * absX * absX - 2.5 * absX * absX + 1.0
+        } else if absX < 2.0 {
+            return -0.5 * absX * absX * absX + 2.5 * absX * absX - 4.0 * absX + 2.0
+        }
+        return 0.0
     }
 
     // MARK: - HTTP multipart POST → colorized JPEG + depth stats in headers
@@ -426,10 +457,10 @@ enum SPECTRANetProcessor {
                 print("[Zetic] WARNING: No valid values in output!")
             }
 
-            // 3. Denormalize: [0, 1] → meters, clamp to valid range
-            // Clamp instead of filtering so close objects show as red (not black)
+            // 3. Denormalize: [0, 1] → meters, apply Zetic calibration, clamp to valid range
+            // ZETIC_DEPTH_SCALE compensates for model training differences vs server
             var depthsInMeters = floatArray.map { normalized in
-                let meters = normalized * DEPTH_MAX
+                let meters = normalized * DEPTH_MAX * ZETIC_DEPTH_SCALE
                 guard meters.isFinite else { return Float.nan }
                 return min(max(meters, DEPTH_MIN), DEPTH_MAX)
             }
