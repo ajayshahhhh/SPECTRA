@@ -42,7 +42,7 @@ struct EdgeARViewContainer: UIViewRepresentable {
         private let model: EdgeDepthSessionModel
         nonisolated(unsafe) private var lastProcessTime: CFAbsoluteTime = 0
         nonisolated(unsafe) private var processing = false
-        private let processInterval: CFAbsoluteTime = 1.0 / 12.0
+        private let processInterval: CFAbsoluteTime = 1.0 / 60.0
 
         init(model: EdgeDepthSessionModel) { self.model = model }
 

@@ -29,9 +29,9 @@ MM_TO_M = 1000.0
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
-# depth clip range, in meters (indoor scenes)
+# depth clip range, in meters (5m+ = blue)
 DEPTH_MIN = 0.5
-DEPTH_MAX = 10.0
+DEPTH_MAX = 5.0
 
 
 def _rotate_np(img: np.ndarray, direction: str) -> np.ndarray:

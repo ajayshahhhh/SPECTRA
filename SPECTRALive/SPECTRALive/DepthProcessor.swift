@@ -13,11 +13,11 @@ struct DepthResult {
 
 enum DepthProcessor {
 
-    // Turbo-inspired HSV LUT: red (near) → yellow → green → cyan → blue (far)
+    // HSV LUT: red (near) → yellow → green → cyan → blue (far), avoiding magenta wrap
     nonisolated static let lut: [(UInt8, UInt8, UInt8)] = {
         (0..<256).map { i in
             let t = Float(i) / 255.0
-            let hue = t * (240.0 / 360.0)
+            let hue = t * (210.0 / 360.0)  // Cap at 210° to avoid blue→magenta transition
             let sector = hue * 6
             let si = Int(sector) % 6
             let f = sector - Float(Int(sector))
@@ -99,8 +99,8 @@ enum DepthProcessor {
         let count = width * height
         guard count == depths.count else { return nil }
 
-        let minD: Float = 0.2
-        let maxD: Float = 5.0
+        let minD: Float = 0.5
+        let maxD: Float = 5.0  // 5m+ = blue
         guard depths.contains(where: { !$0.isNaN && $0 > 0 }) else { return nil }
 
         let cx = width / 2, cy = height / 2
@@ -162,9 +162,9 @@ enum DepthProcessor {
         }
         CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
 
-        let outW = 640, outH = 480
+        let outW = 320, outH = 240
         let depths = resampleFloat(rawDepths, srcW: dW, srcH: dH, dstW: outW, dstH: outH)
-        let minD: Float = 0.2, maxD: Float = 5.0
+        let minD: Float = 0.5, maxD: Float = 5.0  // 5m+ = blue
 
         let cx = outW / 2, cy = outH / 2
         var distSum: Float = 0, distN = 0
@@ -194,7 +194,7 @@ enum DepthProcessor {
         let count = outW * outH
         guard depths.count == count else { return nil }
 
-        let minD: Float = 0.2, maxD: Float = 5.0, range = maxD - minD
+        let minD: Float = 0.5, maxD: Float = 5.0, range = maxD - minD  // 5m+ = blue
 
         let ci = CIImage(cvPixelBuffer: capturedImage)
         let sx = CGFloat(outW) / ci.extent.width

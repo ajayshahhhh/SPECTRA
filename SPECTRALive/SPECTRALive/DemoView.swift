@@ -121,7 +121,7 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
         let trackingNormal = frame.camera.trackingState == .normal
         let t0 = now
 
-        Task.detached(priority: .userInitiated) { [model = self.model, coordinator = self] in
+        Task.detached(priority: .background) { [model = self.model, coordinator = self] in
             var depthImg: UIImage?
             var centerDist: Float?
             var minD: Float?
@@ -130,6 +130,8 @@ final class DemoCoordinator: NSObject, ARSessionDelegate {
             print("[DemoToggle] Processing frame with mode=\(mode), coordinator.depthMode=\(coordinator.depthMode)")
             switch mode {
             case .liveDepth:
+                // Add 500ms delay to increase latency for live depth
+                try? await Task.sleep(for: .milliseconds(500))
                 if let result = DepthProcessor.recolorCamera(frame: frame) {
                     if let cg = result.colorImage.cgImage {
                         depthImg = UIImage(cgImage: cg, scale: 1.0, orientation: .up)

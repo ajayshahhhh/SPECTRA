@@ -124,7 +124,8 @@ def main():
     try:
         from matplotlib import pyplot as plt
         plt.figure(figsize=(10, 7.5))
-        plt.imshow(pred_m_np, cmap="turbo", vmin=DEPTH_MIN, vmax=DEPTH_MAX)
+        # Use reversed turbo so near=red, far=blue (conventional depth visualization)
+        plt.imshow(pred_m_np, cmap="turbo_r", vmin=DEPTH_MIN, vmax=DEPTH_MAX)
         plt.colorbar(label="depth (m)")
         plt.axis("off")
         plt.tight_layout()

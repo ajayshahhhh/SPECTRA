@@ -42,11 +42,11 @@ from spectranet.model import RGBGuidedDepthUpsampler
 CKPT = Path(__file__).parent / "best.pt"
 TARGET_H, TARGET_W = 768, 1024
 
-# Turbo-inspired HSV LUT — matches DepthProcessor.swift exactly
+# HSV LUT — conventional depth mapping: near=red, far=blue
 _LUT_NP: np.ndarray = np.zeros((256, 3), dtype=np.uint8)
 for _i in range(256):
     _t = _i / 255.0
-    _hue = _t * (240.0 / 360.0)
+    _hue = _t * (210.0 / 360.0)  # index 0 (near) → red (0°), index 255 (far) → blue (210°), avoiding magenta wrap
     _s = _hue * 6
     _si = int(_s) % 6
     _f = _s - int(_s)
@@ -82,6 +82,10 @@ _static_bicubic:  torch.Tensor | None = None
 _static_conf_hi:  torch.Tensor | None = None
 _static_out:      torch.Tensor | None = None
 
+# Temporal smoothing for center distance (EMA filter)
+_smoothed_distance: float | None = None
+_SMOOTHING_ALPHA = 0.3  # Lower = more smoothing, higher = more responsive
+
 if _device.type == "cuda":
     _LUT_GPU = torch.from_numpy(_LUT_NP).to(_device)
 
@@ -113,18 +117,19 @@ print("[SPECTRANet] ready — listening for frames.")
 def _colorize_gpu(pred_m: torch.Tensor):
     """Colorize on GPU, return (jpeg_bytes, center_dist, min_d, max_d).
     pred_m: (H, W) float32 on _device, already clamped."""
+    global _smoothed_distance
+
     valid = (pred_m > 0) & torch.isfinite(pred_m)
     if not valid.any():
         return None, 0.0, 0.0, 0.0
 
     vals = pred_m[valid]
-    min_d = vals.min().item()
-    max_d = vals.max().item()
-    if max_d <= min_d:
-        return None, 0.0, min_d, max_d
+    actual_min = vals.min().item()
+    actual_max = vals.max().item()
 
-    # Normalize → LUT index on GPU
-    idx = ((pred_m - min_d) / (max_d - min_d) * 255).clamp(0, 255).long()
+    # Use FIXED depth range for consistent absolute color mapping
+    # 0.5m → red (index 0), 5m+ → blue (index 255)
+    idx = ((pred_m - DEPTH_MIN) / (DEPTH_MAX - DEPTH_MIN) * 255).clamp(0, 255).long()
     idx[~valid] = 0
 
     H, W = pred_m.shape
@@ -132,46 +137,65 @@ def _colorize_gpu(pred_m: torch.Tensor):
     alpha = (valid.to(torch.uint8) * 255).unsqueeze(-1) # (H,W,1)
     rgba = torch.cat([rgb, alpha], dim=-1)              # (H,W,4)
 
-    # Center distance (5×5 patch)
+    # Center distance (11×11 patch, matching SPECTRALive)
     cy, cx = H // 2, W // 2
-    patch = pred_m[cy - 2:cy + 3, cx - 2:cx + 3]
+    patch = pred_m[cy - 5:cy + 6, cx - 5:cx + 6]
     patch_vals = patch[(patch > 0) & torch.isfinite(patch)]
-    center_dist = patch_vals.mean().item() if patch_vals.numel() > 0 else 0.0
+    raw_dist = patch_vals.mean().item() if patch_vals.numel() > 0 else 0.0
+
+    # Apply temporal smoothing (EMA filter)
+    if _smoothed_distance is None:
+        _smoothed_distance = raw_dist
+    else:
+        _smoothed_distance = _SMOOTHING_ALPHA * raw_dist + (1 - _SMOOTHING_ALPHA) * _smoothed_distance
+    center_dist = _smoothed_distance
 
     rgba_np = rgba.cpu().numpy()
     rgb_out = rgba_np[:, :, :3]
     if _jpeg is not None:
-        return _jpeg.encode(rgb_out, quality=70, pixel_format=TJPF_RGB), center_dist, min_d, max_d
+        return _jpeg.encode(rgb_out, quality=70, pixel_format=TJPF_RGB), center_dist, actual_min, actual_max
     buf = io.BytesIO()
     Image.fromarray(rgb_out).save(buf, format="JPEG", quality=70)
-    return buf.getvalue(), center_dist, min_d, max_d
+    return buf.getvalue(), center_dist, actual_min, actual_max
 
 
 def _colorize_cpu(pred_np: np.ndarray):
     """CPU fallback colorize."""
+    global _smoothed_distance
+
     valid = (pred_np > 0) & np.isfinite(pred_np)
     if not valid.any():
         return None, 0.0, 0.0, 0.0
-    min_d, max_d = float(pred_np[valid].min()), float(pred_np[valid].max())
-    if max_d <= min_d:
-        return None, 0.0, min_d, max_d
+    actual_min = float(pred_np[valid].min())
+    actual_max = float(pred_np[valid].max())
+
+    # Use FIXED depth range for consistent absolute color mapping
+    # 0.5m → red (index 0), 5m+ → blue (index 255)
     norm = np.zeros_like(pred_np)
-    norm[valid] = (pred_np[valid] - min_d) / (max_d - min_d) * 255.0
+    norm[valid] = (pred_np[valid] - DEPTH_MIN) / (DEPTH_MAX - DEPTH_MIN) * 255.0
     idx = np.clip(norm, 0, 255).astype(np.uint8)
     H, W = pred_np.shape
     rgba = np.zeros((H, W, 4), dtype=np.uint8)
     rgba[valid, :3] = _LUT_NP[idx[valid]]
     rgba[valid, 3] = 255
     cy, cx = H // 2, W // 2
-    patch = pred_np[cy - 2:cy + 3, cx - 2:cx + 3]
+    patch = pred_np[cy - 5:cy + 6, cx - 5:cx + 6]
     patch_vals = patch[(patch > 0) & np.isfinite(patch)]
-    center_dist = float(patch_vals.mean()) if len(patch_vals) > 0 else 0.0
+    raw_dist = float(patch_vals.mean()) if len(patch_vals) > 0 else 0.0
+
+    # Apply temporal smoothing (EMA filter)
+    if _smoothed_distance is None:
+        _smoothed_distance = raw_dist
+    else:
+        _smoothed_distance = _SMOOTHING_ALPHA * raw_dist + (1 - _SMOOTHING_ALPHA) * _smoothed_distance
+    center_dist = _smoothed_distance
+
     rgb_out = rgba[:, :, :3]
     if _jpeg is not None:
-        return _jpeg.encode(rgb_out, quality=70, pixel_format=TJPF_RGB), center_dist, min_d, max_d
+        return _jpeg.encode(rgb_out, quality=70, pixel_format=TJPF_RGB), center_dist, actual_min, actual_max
     buf = io.BytesIO()
     Image.fromarray(rgb_out).save(buf, format="JPEG", quality=70)
-    return buf.getvalue(), center_dist, min_d, max_d
+    return buf.getvalue(), center_dist, actual_min, actual_max
 
 
 @app.post("/infer")
